@@ -27,6 +27,7 @@
             <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Color="Color.Error" />
             <MudAvatar Class="figma-profile-avatar" />
             <div class="figma-profile"><b>Admin User</b><span>Administrator</span></div>
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
         </div>
         @Body
     </MudMainContent>
@@ -34,6 +35,13 @@
 @code {
     private bool _drawerOpen = true;
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+    [Inject] private LaboratoryManagementSystem.Web.Services.ApiClient Api { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+    private async Task SignOut()
+    {
+        await Api.LogoutAsync();
+        Navigation.NavigateTo("/login", replace: true);
+    }
     private MudTheme _theme = new()
     {
         PaletteLight = new PaletteLight { Primary = "#bd171d", Secondary = "#7b8497", Background = "#ffffff", Surface = "#ffffff", AppbarBackground = "#ffffff", AppbarText = "#172033" },
