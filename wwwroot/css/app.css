@@ -36,3 +36,4 @@ html,body,#app{min-height:100%;font-family:Inter,Arial,sans-serif;background:var
 @media(max-width:960px){.page-wrap{padding:22px}.figma-topbar{height:64px;padding:0 18px}.mobile-menu{display:inline-flex}}
 @media(max-width:700px){.page-wrap{padding:16px}.stat-number{font-size:24px}.content-card{padding:16px!important}.page-wrap .mud-stack-row{flex-wrap:wrap}.page-wrap .mud-button-root{max-width:100%}.figma-profile{display:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+.login-wrap{min-height:calc(100vh - 76px);display:flex;align-items:center;justify-content:center;padding:28px;background:#fff}.login-card{width:100%;max-width:440px;border:1px solid var(--lms-border);border-radius:16px!important;box-shadow:0 12px 40px rgba(30,20,20,.06)!important}.login-card .mud-button-filled-primary{min-height:44px}
