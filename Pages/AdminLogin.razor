@@ -1,21 +1,41 @@
-@page "/login"
+@page "/login"\n@layout LaboratoryManagementSystem.Web.Layout.LoginLayout
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<div class="login-wrap">
-    <MudPaper Class="login-card pa-6" Elevation="0">
-        <MudText Typo="Typo.h5" Class="page-title mb-1">Admin sign in</MudText>
-        <MudText Class="muted mb-5">Sign in to manage the computer laboratory.</MudText>
-        <MudForm @ref="_form">
-            <MudTextField @bind-Value="_companyId" Label="Company ID" Required="true" Variant="Variant.Outlined" />
-            <MudTextField @bind-Value="_password" Label="Password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" Class="mt-3" />
-            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SignIn" Class="mt-5">
-                @(_busy ? "Signing in..." : "Sign in")
-            </MudButton>
-        </MudForm>
-        <MudText Typo="Typo.caption" Class="muted mt-4">Credentials are checked by the LMS API. No demo account is created here.</MudText>
-    </MudPaper>
+<div class="login-page">
+    <section class="login-brand-panel">
+        <div class="login-brand">
+            <div class="login-brand-symbol"><MudIcon Icon="@Icons.Material.Filled.LaptopChromebook" Size="Size.Large" /></div>
+            <div><div class="login-brand-name">ACLC COLLEGE OF MANDAUE</div><div class="login-brand-caption">LABORATORY MANAGEMENT SYSTEM</div></div>
+        </div>
+        <div class="login-brand-copy">
+            <MudText Typo="Typo.overline" Class="login-eyebrow">ADMINISTRATION PORTAL</MudText>
+            <MudText Typo="Typo.h2" Class="login-headline">A smarter way to manage your computer laboratory.</MudText>
+            <MudText Class="login-description">Manage users, monitor computer availability, review activity, and keep your laboratory running smoothly.</MudText>
+        </div>
+        <div class="login-brand-footer">Secure access for authorized administrators only.</div>
+    </section>
+    <section class="login-form-panel">
+        <MudPaper Class="login-card" Elevation="0">
+            <div class="login-card-heading">
+                <MudText Typo="Typo.h4" Class="login-title">Welcome back</MudText>
+                <MudText Class="login-subtitle">Enter your administrator credentials to continue.</MudText>
+            </div>
+            <MudForm @ref="_form">
+                <MudTextField @bind-Value="_companyId" Label="Company ID" Placeholder="Enter your company ID" Required="true" RequiredError="Company ID is required" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Badge" />
+                <MudTextField @bind-Value="_password" Label="Password" Placeholder="Enter your password" InputType="InputType.Password" Required="true" RequiredError="Password is required" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Lock" />
+                <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SignIn" Class="login-submit mt-5">
+                    @if (_busy) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" /> }
+                    @(_busy ? "Signing you in…" : "Sign in securely")
+                </MudButton>
+            </MudForm>
+            <div class="login-security-note"><MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" /><span>Your credentials are verified securely by the LMS API.</span></div>
+            <MudDivider Class="my-5" />
+            <MudText Typo="Typo.caption" Class="login-help">Need access? Contact your system administrator.</MudText>
+        </MudPaper>
+        <div class="login-legal">© 2026 ACLC College of Mandaue <span>•</span> Laboratory Management System</div>
+    </section>
 </div>
 
 @code {
