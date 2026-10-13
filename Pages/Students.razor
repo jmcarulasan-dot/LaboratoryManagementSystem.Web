@@ -67,9 +67,9 @@
         try
         {
             var result = await Api.GetAsync<JsonElement>("api/admin/students");
-            if (!result.HasValue || result.Value.ValueKind != JsonValueKind.Array)
+            if (result.ValueKind != JsonValueKind.Array)
                 _error = "Could not load students. Sign in as an admin and check the API/database.";
-            else _rows = result.Value.EnumerateArray().ToList();
+            else _rows = result.EnumerateArray().ToList();
         }
         catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
         finally { _loading = false; }
