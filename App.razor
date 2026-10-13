@@ -1,4 +1,21 @@
 <Router AppAssembly="@typeof(App).Assembly">
-  <Found Context="routeData"><RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" /></Found>
-  <NotFound><LayoutView Layout="@typeof(MainLayout)"><MudText Typo="Typo.h5">Page not found</MudText></LayoutView></NotFound>
+    <Found Context="routeData">
+        @if (routeData.PageType == typeof(LaboratoryManagementSystem.Web.Pages.AdminLogin))
+        {
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(LoginLayout)" />
+        }
+        else
+        {
+            <ProtectedRouteView RouteData="@routeData" />
+        }
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(LoginLayout)">
+            <div class="not-found-page">
+                <MudText Typo="Typo.h4">Page not found</MudText>
+                <MudText Class="muted">The page you requested doesn't exist.</MudText>
+                <MudButton Href="/login" Color="Color.Primary" Variant="Variant.Filled" Class="mt-4">Return to sign in</MudButton>
+            </div>
+        </LayoutView>
+    </NotFound>
 </Router>
