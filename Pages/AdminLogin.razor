@@ -1,0 +1,45 @@
+@page "/login"
+@inject LaboratoryManagementSystem.Web.Services.ApiClient Api
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<div class="login-wrap">
+    <MudPaper Class="login-card pa-6" Elevation="0">
+        <MudText Typo="Typo.h5" Class="page-title mb-1">Admin sign in</MudText>
+        <MudText Class="muted mb-5">Sign in to manage the computer laboratory.</MudText>
+        <MudForm @ref="_form">
+            <MudTextField @bind-Value="_companyId" Label="Company ID" Required="true" Variant="Variant.Outlined" />
+            <MudTextField @bind-Value="_password" Label="Password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" Class="mt-3" />
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SignIn" Class="mt-5">
+                @(_busy ? "Signing in..." : "Sign in")
+            </MudButton>
+        </MudForm>
+        <MudText Typo="Typo.caption" Class="muted mt-4">Credentials are checked by the LMS API. No demo account is created here.</MudText>
+    </MudPaper>
+</div>
+
+@code {
+    private MudForm? _form;
+    private string _companyId = "";
+    private string _password = "";
+    private bool _busy;
+
+    private async Task SignIn()
+    {
+        await _form!.Validate();
+        if (!_form.IsValid) return;
+        _busy = true;
+        try
+        {
+            if (await Api.LoginAdminAsync(_companyId.Trim(), _password))
+                Navigation.NavigateTo("/");
+            else
+                Snackbar.Add("Sign-in failed. Check your Company ID and password, and make sure the API is running.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not connect to the LMS API: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}
