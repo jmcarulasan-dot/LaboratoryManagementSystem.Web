@@ -32,7 +32,16 @@ public sealed class ApiClient
         return true;
     }
 
-    public async Task<bool> HasAdminSessionAsync()\n    {\n        var token = await _js.InvokeAsync<string?>("sessionStorage.getItem", TokenKey);\n        return !string.IsNullOrWhiteSpace(token);\n    }\n\n    public async Task LogoutAsync() => await _js.InvokeVoidAsync("sessionStorage.removeItem", TokenKey);
+    public async Task<bool> HasAdminSessionAsync()
+    {
+        var token = await _js.InvokeAsync<string?>("sessionStorage.getItem", TokenKey);
+        return !string.IsNullOrWhiteSpace(token);
+    }
+
+    public async Task LogoutAsync()
+    {
+        await _js.InvokeVoidAsync("sessionStorage.removeItem", TokenKey);
+    }
 
     public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body = null)
     {
