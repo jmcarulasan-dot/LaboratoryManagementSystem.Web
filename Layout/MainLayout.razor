@@ -1,11 +1,42 @@
 @inherits LayoutComponentBase
-<MudThemeProvider Theme="@_theme"/><MudPopoverProvider/><MudDialogProvider/><MudSnackbarProvider/>
+<MudThemeProvider Theme="@_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 <MudLayout>
- <MudAppBar Elevation="0" Class="topbar" Color="Color.Surface"><MudIconButton Icon="@Icons.Material.Filled.Menu" OnClick="ToggleDrawer"/><MudText Typo="Typo.h6" Class="ml-2" Style="font-weight:700;color:#172033">Laboratory Management</MudText><MudSpacer/><MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone"/><MudAvatar Color="Color.Primary">AD</MudAvatar><MudText Class="mr-3" Typo="Typo.body2">Administrator</MudText></MudAppBar>
- <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="258px">
-  <div class="brand"><div class="brand-mark">L</div><div>Lab<span style="color:#2563eb">Control</span><div class="muted" style="font-size:11px;font-weight:500">ADMIN CONSOLE</div></div></div>
-  <MudNavMenu><div class="nav-label">WORKSPACE</div><MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.SpaceDashboard">Dashboard</MudNavLink><MudNavLink Href="/students" Icon="@Icons.Material.Filled.Groups">Students</MudNavLink><MudNavLink Href="/rooms-pcs" Icon="@Icons.Material.Filled.Computer">Rooms &amp; PCs</MudNavLink><MudNavLink Href="/vouchers" Icon="@Icons.Material.Filled.ConfirmationNumber">Vouchers</MudNavLink><MudNavLink Href="/sessions" Icon="@Icons.Material.Filled.Schedule">Lab Sessions</MudNavLink><div class="nav-label">MANAGEMENT</div><MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Reports</MudNavLink><MudNavLink Href="/logs" Icon="@Icons.Material.Filled.ReceiptLong">Audit Logs</MudNavLink><MudNavLink Href="/notifications" Icon="@Icons.Material.Filled.Notifications">Notifications</MudNavLink><MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">Settings</MudNavLink></MudNavMenu>
-  <div style="position:absolute;bottom:16px;left:16px;right:16px"><MudDivider Class="mb-3"/><MudButton FullWidth Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Logout">Log out</MudButton></div>
- </MudDrawer><MudMainContent>@Body</MudMainContent>
+    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="250px" Class="figma-sidebar">
+        <div class="figma-brand">
+            <div class="figma-brand-mark"><MudIcon Icon="@Icons.Material.Filled.ChangeHistory" Size="Size.Large" /></div>
+            <div><div class="figma-brand-title">Software Lab</div><div class="figma-brand-subtitle">Admin Portal</div></div>
+        </div>
+        <MudNavMenu Class="figma-nav">
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.PeopleAlt">User Management</MudNavLink>
+            <MudNavLink Href="/rooms-pcs" Icon="@Icons.Material.Outlined.Computer">Computer Management</MudNavLink>
+            <MudNavLink Href="/logs" Icon="@Icons.Material.Outlined.ReceiptLong">Log Management</MudNavLink>
+            <MudNavLink Href="/reports" Icon="@Icons.Material.Outlined.BarChart">Reports</MudNavLink>
+            <MudNavLink Href="/notifications" Icon="@Icons.Material.Outlined.Notifications">Notifications</MudNavLink>
+            <MudNavLink Href="/settings" Icon="@Icons.Material.Outlined.Settings">Settings</MudNavLink>
+        </MudNavMenu>
+        <div class="figma-sidebar-footer">© 2026 ACLC College of Mandaue</div>
+    </MudDrawer>
+    <MudMainContent Class="figma-main">
+        <div class="figma-topbar">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" OnClick="ToggleDrawer" Class="mobile-menu" />
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Color="Color.Error" />
+            <MudAvatar Class="figma-profile-avatar" />
+            <div class="figma-profile"><b>Admin User</b><span>Administrator</span></div>
+        </div>
+        @Body
+    </MudMainContent>
 </MudLayout>
-@code { private bool _drawerOpen=true; private void ToggleDrawer()=>_drawerOpen=!_drawerOpen; private MudTheme _theme=new(){PaletteLight=new PaletteLight{Primary="#2563eb",Secondary="#64748b",Background="#f5f7fb",Surface="#ffffff"},LayoutProperties=new LayoutProperties{DefaultBorderRadius="12px"}}; }
+@code {
+    private bool _drawerOpen = true;
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+    private MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight { Primary = "#bd171d", Secondary = "#7b8497", Background = "#ffffff", Surface = "#ffffff", AppbarBackground = "#ffffff", AppbarText = "#172033" },
+        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "12px" }
+    };
+}
