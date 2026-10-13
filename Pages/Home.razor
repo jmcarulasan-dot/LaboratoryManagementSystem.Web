@@ -106,8 +106,8 @@
                 _summaryRows = root.EnumerateObject().Select(p => new KeyValuePair<string, string>(p.Name, Format(p.Value))).ToList();
 
             var sessions = await Api.GetAsync<JsonElement>("api/admin/sessions");
-            if (sessions.HasValue && sessions.Value.ValueKind == JsonValueKind.Array)
-                _sessions = sessions.Value.EnumerateArray().ToList();
+            if (sessions.ValueKind == JsonValueKind.Array)
+                _sessions = sessions.EnumerateArray().ToList();
         }
         catch (Exception ex)
         {
