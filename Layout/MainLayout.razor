@@ -33,7 +33,7 @@
             <MudSpacer />
             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="admin-role-chip">ADMINISTRATOR</MudChip>
             <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Class="topbar-icon" aria-label="Notifications" />
-            <MudAvatar Class="figma-profile-avatar">@GetInitials()</MudAvatar>
+            <MudAvatar Class="figma-profile-avatar" Image="@_profilePhotoUrl">@GetInitials()</MudAvatar>
             <div class="figma-profile"><b>@_adminName</b><span>@_adminCompanyId</span></div>
             <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
         </div>
@@ -47,6 +47,7 @@
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     private string _adminName = "Administrator";
     private string _adminCompanyId = string.Empty;
+    private string? _profilePhotoUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -56,6 +57,11 @@
             if (profile.ValueKind != System.Text.Json.JsonValueKind.Object) return;
             _adminName = Read(profile, "fullName", "FullName") ?? _adminName;
             _adminCompanyId = Read(profile, "companyID", "CompanyID") ?? string.Empty;
+            var photo = await Api.GetAsync<System.Text.Json.JsonElement>("api/admin/me/photo");
+            if (photo.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                photo.TryGetProperty("contentType", out var contentType) &&
+                photo.TryGetProperty("contentBase64", out var contentBase64))
+                _profilePhotoUrl = $"data:{contentType.GetString()};base64,{contentBase64.GetString()}";
         }
         catch { }
     }
