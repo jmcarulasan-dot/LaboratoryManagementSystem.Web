@@ -2,7 +2,7 @@
 @using System.Text.Json
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
 @inject ISnackbar Snackbar
-@inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <div class="page-wrap">
     <div class="management-heading">
@@ -75,12 +75,13 @@
             else
             {
                 <MudTable Items="_rooms" Hover="true" Dense="true" Elevation="0">
-                    <HeaderContent><MudTh>Room</MudTh><MudTh>Room ID</MudTh><MudTh>Status</MudTh><MudTh>Computers</MudTh></HeaderContent>
+                    <HeaderContent><MudTh>Room</MudTh><MudTh>Room ID</MudTh><MudTh>Status</MudTh><MudTh>Computers</MudTh><MudTh></MudTh></HeaderContent>
                     <RowTemplate>
                         <MudTd><b>@Read(context, "roomName", "RoomName")</b></MudTd>
                         <MudTd>@Read(context, "roomID", "RoomID")</MudTd>
                         <MudTd>@(IsActive(context) ? "Active" : "Inactive")</MudTd>
                         <MudTd>@(_pcs.Count(pc => ReadInt(pc, "roomID", "RoomID") == ReadInt(context, "roomID", "RoomID")))</MudTd>
+                        <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteRoom(context))">Delete</MudButton></MudTd>
                     </RowTemplate>
                 </MudTable>
             }
@@ -97,12 +98,17 @@
             else
             {
                 <MudTable Items="_pcs" Hover="true" Dense="true" Elevation="0">
-                    <HeaderContent><MudTh>Computer</MudTh><MudTh>Room</MudTh><MudTh>Availability</MudTh><MudTh></MudTh></HeaderContent>
+                    <HeaderContent><MudTh>Computer</MudTh><MudTh>Room</MudTh><MudTh>Availability</MudTh><MudTh>Actions</MudTh></HeaderContent>
                     <RowTemplate>
                         <MudTd><b>@Read(context, "pcName", "PCName")</b></MudTd>
                         <MudTd>@Read(context, "roomName", "RoomName")</MudTd>
                         <MudTd><span class="status-pill @(IsAvailable(context) ? "available" : "maintenance")">@Read(context, "pcStatus", "PCStatus")</span></MudTd>
-                        <MudTd><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ToggleStatus(context))">@(IsAvailable(context) ? "Mark maintenance" : "Mark available")</MudButton></MudTd>
+                        <MudTd>
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ToggleStatus(context))">@(IsAvailable(context) ? "Mark maintenance" : "Mark available")</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeletePC(context))">Delete</MudButton>
+                            </MudStack>
+                        </MudTd>
                     </RowTemplate>
                 </MudTable>
             }
@@ -219,6 +225,50 @@
             if (createdCount > 0) await LoadData();
         }
         finally { _saving = false; }
+    }
+
+    private async Task DeleteRoom(JsonElement room)
+    {
+        var id = ReadInt(room, "roomID", "RoomID");
+        var name = Read(room, "roomName", "RoomName");
+        if (id <= 0 || !await JS.InvokeAsync<bool>("confirm", "Delete room " + name + "? The API will block deletion while it has computers.")) return;
+        try
+        {
+            using var response = await Api.SendAsync(HttpMethod.Delete, "api/rooms/" + id);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Room deleted.", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                Snackbar.Add(string.IsNullOrWhiteSpace(detail) ? "Room could not be deleted." : detail.Trim('"'), Severity.Error);
+            }
+        }
+        catch (Exception ex) { Snackbar.Add("Room deletion failed: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task DeletePC(JsonElement pc)
+    {
+        var id = ReadInt(pc, "pcID", "PCID");
+        var name = Read(pc, "pcName", "PCName");
+        if (id <= 0 || !await JS.InvokeAsync<bool>("confirm", "Delete computer " + name + "? Related lab records may prevent deletion.")) return;
+        try
+        {
+            using var response = await Api.SendAsync(HttpMethod.Delete, "api/pcs/" + id);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Computer deleted.", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                Snackbar.Add(string.IsNullOrWhiteSpace(detail) ? "Computer could not be deleted." : detail.Trim('"'), Severity.Error);
+            }
+        }
+        catch (Exception ex) { Snackbar.Add("Computer deletion failed: " + ex.Message, Severity.Error); }
     }
 
     private async Task ToggleStatus(JsonElement pc)
