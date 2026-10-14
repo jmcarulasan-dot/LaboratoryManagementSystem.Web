@@ -215,7 +215,7 @@
             var path = _editing ? $"api/admin/students/{Uri.EscapeDataString(_originalStudentNo)}" : "api/admin/students";
             object body = _editing
                 ? new { studentNo = _studentNo.Trim(), fullName = _fullName.Trim(), courseSection = courseSection, email = _email.Trim(), birthDate = _birthDate?.Date, sex = _sex, contactNumber = _contactNumber, address = _address }
-                : new { studentNo = _studentNo.Trim(), fullName = _fullName.Trim(), courseSection = _courseSection.Trim(), email = _email.Trim(), password = _password };
+                : new { studentNo = _studentNo.Trim(), fullName = _fullName.Trim(), courseSection = courseSection, email = _email.Trim(), password = _password };
             using var response = await Api.SendAsync(_editing ? HttpMethod.Put : HttpMethod.Post, path, body);
             if (!response.IsSuccessStatusCode)
             {
