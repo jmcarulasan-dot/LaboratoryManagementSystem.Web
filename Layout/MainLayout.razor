@@ -4,30 +4,37 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudLayout>
-    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="250px" Class="figma-sidebar">
+    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="264px" Class="figma-sidebar">
         <div class="figma-brand">
-            <div class="figma-brand-mark"><MudIcon Icon="@Icons.Material.Filled.ChangeHistory" Size="Size.Large" /></div>
-            <div><div class="figma-brand-title">Software Lab</div><div class="figma-brand-subtitle">Admin Portal</div></div>
+            <div class="figma-brand-mark"><MudIcon Icon="@Icons.Material.Filled.Computer" Size="Size.Medium" /></div>
+            <div>
+                <div class="figma-brand-title">ACLC College</div>
+                <div class="figma-brand-subtitle">Laboratory Management</div>
+            </div>
         </div>
+        <MudText Class="nav-section-title">WORKSPACE</MudText>
         <MudNavMenu Class="figma-nav">
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Dashboard</MudNavLink>
-            <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.PeopleAlt">User Management</MudNavLink>
-            <MudNavLink Href="/rooms-pcs" Icon="@Icons.Material.Outlined.Computer">Computer Management</MudNavLink>
-            <MudNavLink Href="/logs" Icon="@Icons.Material.Outlined.ReceiptLong">Log Management</MudNavLink>
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Overview</MudNavLink>
+            <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.PeopleAlt">Students</MudNavLink>
+            <MudNavLink Href="/rooms-pcs" Icon="@Icons.Material.Outlined.Computer">Rooms &amp; PCs</MudNavLink>
+            <MudNavLink Href="/sessions" Icon="@Icons.Material.Outlined.Schedule">Lab sessions</MudNavLink>
+            <MudNavLink Href="/vouchers" Icon="@Icons.Material.Outlined.ConfirmationNumber">Vouchers</MudNavLink>
+            <MudNavLink Href="/logs" Icon="@Icons.Material.Outlined.ReceiptLong">Audit logs</MudNavLink>
             <MudNavLink Href="/reports" Icon="@Icons.Material.Outlined.BarChart">Reports</MudNavLink>
             <MudNavLink Href="/notifications" Icon="@Icons.Material.Outlined.Notifications">Notifications</MudNavLink>
             <MudNavLink Href="/settings" Icon="@Icons.Material.Outlined.Settings">Settings</MudNavLink>
         </MudNavMenu>
-        <div class="figma-sidebar-footer">© 2026 ACLC College of Mandaue</div>
+        <div class="figma-sidebar-footer">ACLC College of Mandaue <span>·</span> Admin workspace</div>
     </MudDrawer>
     <MudMainContent Class="figma-main">
         <div class="figma-topbar">
             <MudIconButton Icon="@Icons.Material.Filled.Menu" OnClick="ToggleDrawer" Class="mobile-menu" />
             <MudSpacer />
-            <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Color="Color.Error" />
-            <MudAvatar Class="figma-profile-avatar" />
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="admin-role-chip">ADMINISTRATOR</MudChip>
+            <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Class="topbar-icon" aria-label="Notifications" />
+            <MudAvatar Class="figma-profile-avatar">@GetInitials()</MudAvatar>
             <div class="figma-profile"><b>@_adminName</b><span>@_adminCompanyId</span></div>
-            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
         </div>
         @Body
     </MudMainContent>
@@ -52,6 +59,14 @@
         catch { }
     }
 
+    private string GetInitials()
+    {
+        var parts = _adminName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 1
+            ? $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[^1][0])}"
+            : parts.Length == 1 ? parts[0][..1].ToUpperInvariant() : "A";
+    }
+
     private static string? Read(System.Text.Json.JsonElement profile, params string[] keys)
     {
         foreach (var property in profile.EnumerateObject())
@@ -59,14 +74,16 @@
                 return property.Value.ValueKind == System.Text.Json.JsonValueKind.String ? property.Value.GetString() : property.Value.ToString();
         return null;
     }
+
     private async Task SignOut()
     {
         await Api.LogoutAsync();
         Navigation.NavigateTo("/login", replace: true);
     }
+
     private MudTheme _theme = new()
     {
-        PaletteLight = new PaletteLight { Primary = "#bd171d", Secondary = "#7b8497", Background = "#ffffff", Surface = "#ffffff", AppbarBackground = "#ffffff", AppbarText = "#172033" },
+        PaletteLight = new PaletteLight { Primary = "#b4232c", Secondary = "#66758b", Background = "#f4f6fa", Surface = "#ffffff", AppbarBackground = "#ffffff", AppbarText = "#17243a" },
         LayoutProperties = new LayoutProperties { DefaultBorderRadius = "12px" }
     };
 }
