@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 
 namespace LaboratoryManagementSystem.Web.Services;
@@ -57,6 +58,32 @@ public sealed class ApiClient
         if (!string.IsNullOrWhiteSpace(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (body is not null) request.Content = JsonContent.Create(body);
+        var response = await _http.SendAsync(request);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            response.Dispose();
+            await LogoutAsync();
+            _navigation.NavigateTo("/login", replace: true);
+            return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
+        }
+        return response;
+    }
+
+    public async Task<HttpResponseMessage> UploadFileAsync(HttpMethod method, string path, string fieldName, IBrowserFile file, long maxAllowedSize)
+    {
+        using var request = new HttpRequestMessage(method, path);
+        var token = await _js.InvokeAsync<string?>("sessionStorage.getItem", TokenKey);
+        if (!string.IsNullOrWhiteSpace(token))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        await using var stream = file.OpenReadStream(maxAllowedSize);
+        using var content = new MultipartFormDataContent();
+        var fileContent = new StreamContent(stream);
+        if (!string.IsNullOrWhiteSpace(file.ContentType))
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+        content.Add(fileContent, fieldName, Path.GetFileName(file.Name));
+        request.Content = content;
+
         var response = await _http.SendAsync(request);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
