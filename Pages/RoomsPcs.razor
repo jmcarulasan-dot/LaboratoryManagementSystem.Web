@@ -1,51 +1,249 @@
 @page "/rooms-pcs"
 @using System.Text.Json
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
+@inject ISnackbar Snackbar
 
 <div class="page-wrap">
-    <MudText Typo="Typo.h4" Class="page-title">Rooms & PCs</MudText>
-    <MudText Class="muted mt-1 mb-6">Live records from the LMS database.</MudText>
+    <div class="management-heading">
+        <div>
+            <MudText Typo="Typo.h4" Class="page-title">Rooms &amp; PCs</MudText>
+            <MudText Class="muted mt-1">Set up lab rooms and manage the computers assigned to each one.</MudText>
+        </div>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.AddHome" OnClick="@(() => _roomForm = !_roomForm)">Add room</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add" Disabled="@(_rooms.Count == 0)" OnClick="@(() => _pcForm = !_pcForm)">Add PCs</MudButton>
+        </MudStack>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">@_error</MudAlert>
+    }
+    @if (_roomForm)
+    {
+        <MudPaper Class="content-card pa-5 mb-4" Elevation="0">
+            <MudText Typo="Typo.h6" Class="mb-3">Create a lab room</MudText>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudTextField @bind-Value="_roomName" Label="Room name" Placeholder="Example: SLab1" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" />
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="CreateRoom">Save room</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="@(() => _roomForm = false)">Cancel</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+    @if (_pcForm)
+    {
+        <MudPaper Class="content-card pa-5 mb-4" Elevation="0">
+            <MudText Typo="Typo.h6" Class="mb-1">Create computers</MudText>
+            <MudText Class="muted mb-4">Add one computer or a numbered range. Names are generated from the selected room.</MudText>
+            <MudGrid Spacing="2" AlignItems="AlignItems.Center">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="int" @bind-Value="_selectedRoomId" Label="Room" Variant="Variant.Outlined" Dense="true">
+                        @foreach (var room in _rooms)
+                        {
+                            <MudSelectItem T="int" Value="@ReadInt(room, "roomID", "RoomID")">@Read(room, "roomName", "RoomName")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3"><MudNumericField T="int" @bind-Value="_firstNumber" Label="First PC number" Min="1" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><MudNumericField T="int" @bind-Value="_quantity" Label="How many PCs?" Min="1" Max="100" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><MudSelect T="string" @bind-Value="_pcStatus" Label="Initial status" Variant="Variant.Outlined"><MudSelectItem Value="@("Available")">Available</MudSelectItem><MudSelectItem Value="@("Under Maintenance")">Under maintenance</MudSelectItem></MudSelect></MudItem>
+            </MudGrid>
+            <MudText Class="pc-name-preview mt-3">Example name: @PreviewName</MudText>
+            <MudStack Row="true" Spacing="2" Class="mt-3">
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="CreatePCs">@(_saving ? "Creating…" : "Create PCs")</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="@(() => _pcForm = false)">Cancel</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
     @if (_loading)
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Error" Class="mb-4" />
     }
-    else if (!string.IsNullOrWhiteSpace(_error))
+    else
     {
-        <MudAlert Severity="Severity.Warning" Class="mb-4">@_error</MudAlert>
+        <MudPaper Class="content-card pa-4 mb-4" Elevation="0">
+            <div class="management-section-heading">
+                <div><MudText Typo="Typo.h6">Lab rooms</MudText><MudText Class="muted" Typo="Typo.body2">@_rooms.Count room(s)</MudText></div>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="LoadData">Refresh</MudButton>
+            </div>
+            @if (_rooms.Count == 0)
+            {
+                <div class="management-empty">No rooms yet. Add your first lab room to begin setting up computers.</div>
+            }
+            else
+            {
+                <MudTable Items="_rooms" Hover="true" Dense="true" Elevation="0">
+                    <HeaderContent><MudTh>Room</MudTh><MudTh>Room ID</MudTh><MudTh>Status</MudTh><MudTh>Computers</MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd><b>@Read(context, "roomName", "RoomName")</b></MudTd>
+                        <MudTd>@Read(context, "roomID", "RoomID")</MudTd>
+                        <MudTd>@(IsActive(context) ? "Active" : "Inactive")</MudTd>
+                        <MudTd>@_pcs.Count(pc => ReadInt(pc, "roomID", "RoomID") == ReadInt(context, "roomID", "RoomID"))</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+
+        <MudPaper Class="content-card pa-4" Elevation="0">
+            <div class="management-section-heading">
+                <div><MudText Typo="Typo.h6">Lab computers</MudText><MudText Class="muted" Typo="Typo.body2">@_pcs.Count computer(s) across all rooms</MudText></div>
+            </div>
+            @if (_pcs.Count == 0)
+            {
+                <div class="management-empty">No computers yet. Use “Add PCs” to create a numbered range.</div>
+            }
+            else
+            {
+                <MudTable Items="_pcs" Hover="true" Dense="true" Elevation="0">
+                    <HeaderContent><MudTh>Computer</MudTh><MudTh>Room</MudTh><MudTh>Availability</MudTh><MudTh></MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd><b>@Read(context, "pcName", "PCName")</b></MudTd>
+                        <MudTd>@Read(context, "roomName", "RoomName")</MudTd>
+                        <MudTd><span class="status-pill @(IsAvailable(context) ? "available" : "maintenance")">@Read(context, "pcStatus", "PCStatus")</span></MudTd>
+                        <MudTd><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ToggleStatus(context))">@(IsAvailable(context) ? "Mark maintenance" : "Mark available")</MudButton></MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
     }
-    <MudCard Class="content-card pa-5 mb-5" Elevation="0">
-        <MudText Typo="Typo.h6" Class="mb-4">Rooms</MudText>
-        <ApiDataTable Items="_rooms" Columns="_roomColumns" EmptyMessage="No rooms are in the database yet." />
-    </MudCard>
-    <MudCard Class="content-card pa-5" Elevation="0">
-        <MudText Typo="Typo.h6" Class="mb-4">Computers</MudText>
-        <ApiDataTable Items="_pcs" Columns="_pcColumns" EmptyMessage="No computers are in the database yet." />
-    </MudCard>
 </div>
 
 @code {
-    private readonly string[] _roomColumns = ["RoomID", "RoomName", "IsActive"];
-    private readonly string[] _pcColumns = ["PCID", "PCName", "RoomID", "PCStatus", "IsActive"];
     private IReadOnlyCollection<JsonElement> _rooms = Array.Empty<JsonElement>();
     private IReadOnlyCollection<JsonElement> _pcs = Array.Empty<JsonElement>();
     private bool _loading = true;
+    private bool _saving;
+    private bool _roomForm;
+    private bool _pcForm;
     private string? _error;
+    private string _roomName = "";
+    private int _selectedRoomId;
+    private int _firstNumber = 1;
+    private int _quantity = 40;
+    private string _pcStatus = "Available";
 
-    protected override async Task OnInitializedAsync()
+    private string PreviewName
     {
+        get
+        {
+            var roomName = _rooms.FirstOrDefault(r => ReadInt(r, "roomID", "RoomID") == _selectedRoomId);
+            var prefix = Read(roomName, "roomName", "RoomName");
+            return $"{prefix}-PC{_firstNumber:00}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _error = null;
         try
         {
             var rooms = await Api.GetAsync<JsonElement>("api/rooms");
             var pcs = await Api.GetAsync<JsonElement>("api/pcs");
             if (rooms.ValueKind != JsonValueKind.Array || pcs.ValueKind != JsonValueKind.Array)
-                _error = "Rooms and computers could not be loaded. Check your admin session and the API/database connection.";
+                _error = "Rooms and computers could not be loaded. Sign in as an admin and check the API/database connection.";
             else
             {
                 _rooms = rooms.EnumerateArray().ToArray();
                 _pcs = pcs.EnumerateArray().ToArray();
+                if (_selectedRoomId == 0 && _rooms.Count > 0)
+                    _selectedRoomId = ReadInt(_rooms.First(), "roomID", "RoomID");
             }
         }
         catch (Exception ex) { _error = $"Unable to connect to the LMS API: {ex.Message}"; }
         finally { _loading = false; }
     }
+
+    private async Task CreateRoom()
+    {
+        if (string.IsNullOrWhiteSpace(_roomName)) { Snackbar.Add("Enter a room name.", Severity.Warning); return; }
+        _saving = true;
+        try
+        {
+            var created = await Api.SendSuccessAsync(HttpMethod.Post, "api/rooms", new { roomName = _roomName.Trim(), isActive = true });
+            if (!created) { Snackbar.Add("Room could not be created. Check whether its name already exists.", Severity.Error); return; }
+            Snackbar.Add("Room created.", Severity.Success);
+            _roomName = "";
+            _roomForm = false;
+            await LoadData();
+        }
+        catch (Exception ex) { Snackbar.Add($"Room creation failed: {ex.Message}", Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task CreatePCs()
+    {
+        if (_selectedRoomId <= 0 || _quantity < 1 || _quantity > 100 || _firstNumber < 1)
+        {
+            Snackbar.Add("Choose a room and enter a valid PC range (1–100 computers).", Severity.Warning);
+            return;
+        }
+        var room = _rooms.FirstOrDefault(r => ReadInt(r, "roomID", "RoomID") == _selectedRoomId);
+        var roomName = Read(room, "roomName", "RoomName");
+        if (string.IsNullOrWhiteSpace(roomName)) { Snackbar.Add("Choose a valid room.", Severity.Warning); return; }
+
+        _saving = true;
+        var createdCount = 0;
+        string? failure = null;
+        try
+        {
+            for (var number = _firstNumber; number < _firstNumber + _quantity; number++)
+            {
+                var name = $"{roomName}-PC{number:00}";
+                var ok = await Api.SendSuccessAsync(HttpMethod.Post, "api/pcs", new
+                {
+                    roomID = _selectedRoomId,
+                    pcName = name,
+                    pcStatus = _pcStatus,
+                    isActive = true
+                });
+                if (!ok) { failure = $"Could not add {name}. Earlier PCs in this range may already have been saved."; break; }
+                createdCount++;
+            }
+
+            if (createdCount > 0)
+            {
+                Snackbar.Add(failure is null ? $"{createdCount} PCs added to {roomName}." : $"{createdCount} PCs added. {failure}", failure is null ? Severity.Success : Severity.Warning);
+                _pcForm = failure is not null;
+                await LoadData();
+            }
+            else if (failure is not null) Snackbar.Add(failure, Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(createdCount == 0 ? $"PC creation failed: {ex.Message}" : $"{createdCount} PCs were added before the request failed: {ex.Message}", Severity.Error);
+            if (createdCount > 0) await LoadData();
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ToggleStatus(JsonElement pc)
+    {
+        var id = ReadInt(pc, "pcID", "PCID");
+        if (id <= 0) return;
+        var next = IsAvailable(pc) ? "Under Maintenance" : "Available";
+        try
+        {
+            var ok = await Api.SendSuccessAsync(HttpMethod.Put, $"api/pcs/{id}/status", next);
+            if (ok) { Snackbar.Add($"Computer marked {next.ToLowerInvariant()}.", Severity.Success); await LoadData(); }
+            else Snackbar.Add("Computer status could not be updated.", Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add($"Status update failed: {ex.Message}", Severity.Error); }
+    }
+
+    private static string Read(JsonElement row, params string[] keys)
+    {
+        if (row.ValueKind != JsonValueKind.Object) return "";
+        foreach (var p in row.EnumerateObject())
+            if (keys.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
+                return p.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? "" : p.Value.ToString();
+        return "";
+    }
+
+    private static int ReadInt(JsonElement row, params string[] keys) => int.TryParse(Read(row, keys), out var value) ? value : 0;
+    private static bool IsActive(JsonElement row) => Read(row, "isActive", "IsActive").Equals("true", StringComparison.OrdinalIgnoreCase);
+    private static bool IsAvailable(JsonElement row) => Read(row, "pcStatus", "PCStatus").Equals("Available", StringComparison.OrdinalIgnoreCase);
 }
