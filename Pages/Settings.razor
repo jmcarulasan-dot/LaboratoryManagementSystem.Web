@@ -1,5 +1,6 @@
 @page "/settings"
 @using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
 @inject ISnackbar Snackbar
 
@@ -19,6 +20,14 @@
         <MudPaper Elevation="0" Class="content-card pa-5 mb-5">
             <div class="management-section-heading">
                 <div><MudText Typo="Typo.h6">Admin profile</MudText><MudText Class="muted" Typo="Typo.body2">Update the details associated with your administrator account.</MudText></div>
+            </div>
+            <div class="d-flex align-center gap-4 mb-4">
+                <MudAvatar Size="Size.Large" Image="@_photoDataUrl">@GetInitials()</MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle1">Profile picture</MudText>
+                    <MudText Typo="Typo.caption" Class="muted">JPG or PNG, up to 5 MB.</MudText>
+                    <InputFile OnChange="UploadPhoto" accept=".jpg,.jpeg,.png" />
+                </div>
             </div>
             <MudGrid Spacing="2">
                 <MudItem xs="12" sm="6"><MudTextField @bind-Value="_companyId" Label="Company ID" Variant="Variant.Outlined" Required="true" /></MudItem>
@@ -49,6 +58,7 @@
     private string _companyId = "";
     private string _fullName = "";
     private string _email = "";
+    private string? _photoDataUrl;
     private string _currentPassword = string.Empty;
     private string _newPassword = string.Empty;
     private string _confirmPassword = string.Empty;
@@ -69,6 +79,7 @@
                 _companyId = Read("companyID", "CompanyID");
                 _fullName = Read("fullName", "FullName");
                 _email = Read("email", "Email");
+                await LoadPhoto();
             }
         }
         catch (Exception ex) { _error = $"Unable to load your admin profile: {ex.Message}"; }
@@ -82,6 +93,50 @@
             if (names.Contains(property.Name, StringComparer.OrdinalIgnoreCase))
                 return property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? "" : property.Value.ToString();
         return "";
+    }
+
+    private async Task LoadPhoto()
+    {
+        var photo = await Api.GetAsync<JsonElement>("api/admin/me/photo");
+        if (photo.ValueKind == JsonValueKind.Object &&
+            photo.TryGetProperty("contentType", out var type) &&
+            photo.TryGetProperty("contentBase64", out var data))
+            _photoDataUrl = $"data:{type.GetString()};base64,{data.GetString()}";
+    }
+
+    private async Task UploadPhoto(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (extension is not (".jpg" or ".jpeg" or ".png"))
+        {
+            Snackbar.Add("Choose a JPG or PNG image.", Severity.Warning);
+            return;
+        }
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            Snackbar.Add("The profile picture must be 5 MB or smaller.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var response = await Api.UploadFileAsync(HttpMethod.Put, "api/admin/me/photo", "photo", file, 5 * 1024 * 1024);
+            if (!response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(await response.Content.ReadAsStringAsync(), Severity.Error);
+                return;
+            }
+            await LoadPhoto();
+            Snackbar.Add("Profile picture updated.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add("Could not upload the profile picture: " + ex.Message, Severity.Error); }
+    }
+
+    private string GetInitials()
+    {
+        var parts = _fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 1 ? $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant() : (parts.FirstOrDefault() ?? "A")[..1].ToUpperInvariant();
     }
 
     private async Task SaveProfile()
