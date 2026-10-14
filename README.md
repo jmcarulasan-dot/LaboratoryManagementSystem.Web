@@ -12,11 +12,17 @@ Blazor WebAssembly admin client for the Laboratory Management System. It follows
 
 1. Configure the API database connection and private `Jwt:Key` as described in the API repository README.
 2. Start the LMS API.
-3. Confirm `wwwroot/appsettings.json` has the API URL for the local API.
+3. Start the API with its `https` profile and start the web app with its `LaboratoryManagementSystem.Web` profile. The web client automatically uses the matching localhost API address.
 4. Run `dotnet restore` and `dotnet run` from this project directory.
 5. Sign in with an existing admin account.
 
 The login page calls `POST /api/login/admin`. The JWT is kept in browser session storage and sent as a Bearer token on protected requests. The API validates the signature, issuer, audience, expiry, and Admin role. A 401 clears the session and returns the user to sign in.
+
+## Connect over Wi-Fi (SVS-style)
+
+The API and web app each have a `Network` launch profile that listens on the computer's network interfaces. Start both with those profiles, then open the web app from this computer or a device on the same Wi-Fi using `http://<computer-ip>:60432`. The web client uses the same host IP at API port `5106`; this also gives the future Flutter app a stable API pattern: `http://<computer-ip>:5106`.
+
+Find the current computer IPv4 address with `ipconfig` and use the Wi-Fi adapter address. If the router changes it, use the new IP in the browser and Flutter configuration. Keep devices on the same network and allow the .NET apps through Windows Firewall when prompted. The API continues to connect to SQL Server from the computer running it.
 
 ## Database-backed screens
 

@@ -9,8 +9,23 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddMudServices();
 
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7115/";
-builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
+var configuredApiBaseUrl = builder.Configuration["ApiBaseUrl"];
+var apiBaseUri = Uri.TryCreate(configuredApiBaseUrl, UriKind.Absolute, out var configuredApiUri)
+    ? configuredApiUri
+    : CreateLocalApiBaseUri(builder.HostEnvironment.BaseAddress);
+builder.Services.AddScoped(_ => new HttpClient { BaseAddress = apiBaseUri });
 builder.Services.AddScoped<ApiClient>();
 
 await builder.Build().RunAsync();
+
+static Uri CreateLocalApiBaseUri(string webBaseAddress)
+{
+    var webUri = new Uri(webBaseAddress);
+    return new UriBuilder(webUri)
+    {
+        Port = webUri.Scheme == Uri.UriSchemeHttps ? 7115 : 5106,
+        Path = "/",
+        Query = string.Empty,
+        Fragment = string.Empty
+    }.Uri;
+}
