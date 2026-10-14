@@ -80,7 +80,7 @@
                         <MudTd><b>@Read(context, "roomName", "RoomName")</b></MudTd>
                         <MudTd>@Read(context, "roomID", "RoomID")</MudTd>
                         <MudTd>@(IsActive(context) ? "Active" : "Inactive")</MudTd>
-                        <MudTd>@_pcs.Count(pc => ReadInt(pc, "roomID", "RoomID") == ReadInt(context, "roomID", "RoomID"))</MudTd>
+                        <MudTd>@(_pcs.Count(pc => ReadInt(pc, "roomID", "RoomID") == ReadInt(context, "roomID", "RoomID")))</MudTd>
                     </RowTemplate>
                 </MudTable>
             }
