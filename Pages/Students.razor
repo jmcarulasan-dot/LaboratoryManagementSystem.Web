@@ -4,47 +4,97 @@
 @inject ISnackbar Snackbar
 
 <div class="page-wrap">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6">
-        <div><MudText Typo="Typo.h4" Class="page-title">User Management</MudText><MudText Class="muted mt-1">Student accounts loaded from the LMS API.</MudText></div>
-        <MudButton Href="/login" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login">Admin sign in</MudButton>
-    </MudStack>
+    <div class="management-heading">
+        <div>
+            <MudText Typo="Typo.h4" Class="page-title">Students</MudText>
+            <MudText Class="muted mt-1">Create student accounts, update profiles, and manage account access.</MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.PersonAdd" OnClick="StartNew">Add student</MudButton>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">@_error</MudAlert>
+    }
+    @if (!string.IsNullOrWhiteSpace(_twoFactorUri))
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Student account created. Save this authenticator setup link for the student:<br />
+            <span class="setup-uri">@_twoFactorUri</span>
+        </MudAlert>
+    }
+
+    @if (_formOpen)
+    {
+        <MudPaper Class="content-card pa-5 mb-5" Elevation="0">
+            <MudText Typo="Typo.h6" Class="mb-1">@(_editing ? "Edit student profile" : "Create student account")</MudText>
+            <MudText Class="muted mb-4">@(_editing ? "Update the student's contact and enrollment details." : "Create an account with a temporary password for the student.")</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_studentNo" Label="Student number" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_fullName" Label="Full name" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_courseSection" Label="Course / section" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_email" Label="Email address" Variant="Variant.Outlined" Required="true" /></MudItem>
+                @if (!_editing)
+                {
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_password" Label="Temporary password" InputType="InputType.Password" Variant="Variant.Outlined" Required="true" HelperText="At least 8 characters, including uppercase and lowercase letters." /></MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12" sm="6"><MudDatePicker @bind-Date="_birthDate" Label="Birth date" Variant="Variant.Outlined" Clearable="true" /></MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="string" @bind-Value="_sex" Label="Sex" Variant="Variant.Outlined" Clearable="true">
+                            <MudSelectItem Value="@("Female")">Female</MudSelectItem>
+                            <MudSelectItem Value="@("Male")">Male</MudSelectItem>
+                            <MudSelectItem Value="@("Prefer not to say")">Prefer not to say</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_contactNumber" Label="Contact number" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_address" Label="Address" Variant="Variant.Outlined" Lines="2" /></MudItem>
+                }
+            </MudGrid>
+            <MudStack Row="true" Spacing="2" Class="mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveStudent">@(_saving ? "Saving…" : _editing ? "Save changes" : "Create account")</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="CancelForm">Cancel</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
     <MudPaper Elevation="0" Class="content-card pa-4">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
-            <MudTextField @bind-Value="_search" Placeholder="Search students..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:340px" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
+            <MudTextField @bind-Value="_search" Placeholder="Search students..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:360px" />
             <MudSpacer />
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadStudents">Refresh</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="LoadStudents">Refresh</MudButton>
         </MudStack>
         @if (_loading)
         {
             <MudProgressLinear Indeterminate="true" Color="Color.Error" />
         }
-        else if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <MudAlert Severity="Severity.Warning">@_error <MudButton Href="/login" Size="Size.Small" Color="Color.Primary">Sign in</MudButton></MudAlert>
-        }
         else if (_rows.Count == 0)
         {
-            <MudText Class="muted pa-4">No student records were returned by the API.</MudText>
+            <MudText Class="muted pa-4">No student accounts were returned by the API.</MudText>
         }
         else
         {
             <MudTable Items="FilteredRows" Hover="true" Dense="true" Elevation="0">
-                <HeaderContent><MudTh>Student No.</MudTh><MudTh>Full Name</MudTh><MudTh>Course / Section</MudTh><MudTh>Email</MudTh><MudTh>Status</MudTh><MudTh>Action</MudTh></HeaderContent>
+                <HeaderContent><MudTh>Student number</MudTh><MudTh>Full name</MudTh><MudTh>Course / section</MudTh><MudTh>Email</MudTh><MudTh>Status</MudTh><MudTh>Actions</MudTh></HeaderContent>
                 <RowTemplate>
                     <MudTd>@Read(context, "studentNo", "StudentNo")</MudTd>
                     <MudTd>@Read(context, "fullName", "FullName")</MudTd>
                     <MudTd>@Read(context, "courseSection", "CourseSection")</MudTd>
                     <MudTd>@Read(context, "email", "Email")</MudTd>
-                    <MudTd>@(IsSuspended(context) ? "Suspended" : "Active")</MudTd>
+                    <MudTd><span class="status-pill @(IsSuspended(context) ? "maintenance" : "available")">@(IsSuspended(context) ? "Suspended" : "Active")</span></MudTd>
                     <MudTd>
-                        @if (IsSuspended(context))
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="@(() => SetSuspension(context, false))">Unsuspend</MudButton>
-                        }
-                        else
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => SetSuspension(context, true))">Suspend</MudButton>
-                        }
+                        <MudStack Row="true" Spacing="1">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => EditStudent(context))">Edit</MudButton>
+                            @if (IsSuspended(context))
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success" OnClick="@(() => SetSuspension(context, false))">Unsuspend</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => SetSuspension(context, true))">Suspend</MudButton>
+                            }
+                        </MudStack>
                     </MudTd>
                 </RowTemplate>
             </MudTable>
@@ -55,9 +105,23 @@
 @code {
     private string _search = "";
     private bool _loading = true;
+    private bool _saving;
+    private bool _formOpen;
+    private bool _editing;
     private string? _error;
+    private string? _twoFactorUri;
     private List<JsonElement> _rows = new();
     private IEnumerable<JsonElement> FilteredRows => string.IsNullOrWhiteSpace(_search) ? _rows : _rows.Where(r => r.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase));
+    private string _originalStudentNo = "";
+    private string _studentNo = "";
+    private string _fullName = "";
+    private string _courseSection = "";
+    private string _email = "";
+    private string _password = "";
+    private DateTime? _birthDate;
+    private string? _sex;
+    private string _contactNumber = "";
+    private string _address = "";
 
     protected override async Task OnInitializedAsync() => await LoadStudents();
 
@@ -73,6 +137,81 @@
         }
         catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
         finally { _loading = false; }
+    }
+
+    private void StartNew()
+    {
+        ClearForm();
+        _editing = false;
+        _formOpen = true;
+    }
+
+    private void EditStudent(JsonElement row)
+    {
+        _originalStudentNo = Read(row, "studentNo", "StudentNo");
+        _studentNo = _originalStudentNo;
+        _fullName = Read(row, "fullName", "FullName");
+        _courseSection = Read(row, "courseSection", "CourseSection");
+        _email = Read(row, "email", "Email");
+        _birthDate = DateTime.TryParse(Read(row, "birthDate", "BirthDate"), out var date) ? date : null;
+        _sex = Read(row, "sex", "Sex");
+        _contactNumber = Read(row, "contactNumber", "ContactNumber");
+        _address = Read(row, "address", "Address");
+        _editing = true;
+        _formOpen = true;
+    }
+
+    private void CancelForm() => _formOpen = false;
+    private void ClearForm()
+    {
+        _originalStudentNo = _studentNo = _fullName = _courseSection = _email = _password = _contactNumber = _address = "";
+        _birthDate = null;
+        _sex = null;
+    }
+
+    private async Task SaveStudent()
+    {
+        if (string.IsNullOrWhiteSpace(_studentNo) || string.IsNullOrWhiteSpace(_fullName) || string.IsNullOrWhiteSpace(_courseSection) || string.IsNullOrWhiteSpace(_email) ||
+            (!_editing && string.IsNullOrWhiteSpace(_password)))
+        {
+            Snackbar.Add("Complete all required fields.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var path = _editing ? $"api/admin/students/{Uri.EscapeDataString(_originalStudentNo)}" : "api/admin/students";
+            object body = _editing
+                ? new { studentNo = _studentNo.Trim(), fullName = _fullName.Trim(), courseSection = _courseSection.Trim(), email = _email.Trim(), birthDate = _birthDate?.Date, sex = _sex, contactNumber = _contactNumber, address = _address }
+                : new { studentNo = _studentNo.Trim(), fullName = _fullName.Trim(), courseSection = _courseSection.Trim(), email = _email.Trim(), password = _password };
+            using var response = await Api.SendAsync(_editing ? HttpMethod.Put : HttpMethod.Post, path, body);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                Snackbar.Add(string.IsNullOrWhiteSpace(detail) ? "Student could not be saved." : detail.Trim('"'), Severity.Error);
+                return;
+            }
+
+            if (!_editing)
+            {
+                try
+                {
+                    using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+                    if (json.RootElement.TryGetProperty("twoFactorSetupUri", out var uri))
+                        _twoFactorUri = uri.GetString();
+                }
+                catch { }
+                Snackbar.Add("Student account created.", Severity.Success);
+            }
+            else Snackbar.Add("Student profile updated.", Severity.Success);
+
+            _formOpen = false;
+            ClearForm();
+            await LoadStudents();
+        }
+        catch (Exception ex) { Snackbar.Add($"Student save failed: {ex.Message}", Severity.Error); }
+        finally { _saving = false; }
     }
 
     private async Task SetSuspension(JsonElement row, bool suspend)
@@ -94,9 +233,9 @@
 
     private static string Read(JsonElement row, params string[] names)
     {
-        if (row.ValueKind != JsonValueKind.Object) return "—";
+        if (row.ValueKind != JsonValueKind.Object) return "";
         foreach (var name in names)
-            if (row.TryGetProperty(name, out var value)) return value.ValueKind == JsonValueKind.Null ? "—" : value.ToString();
-        return "—";
+            if (row.TryGetProperty(name, out var value)) return value.ValueKind == JsonValueKind.Null ? "" : value.ToString();
+        return "";
     }
 }
