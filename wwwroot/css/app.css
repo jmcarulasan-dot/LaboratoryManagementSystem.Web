@@ -209,3 +209,11 @@ html, body, #app { background: var(--lms-page); color: var(--lms-ink); }
   .summary-grid { grid-template-columns:1fr; }
   .dashboard-card-heading { align-items:flex-start; }
 }
+
+
+/* Login page fills the available browser canvas. */
+.auth-shell { min-height:100vh; padding:0; background:#f3f5f8; }
+.login-page { width:100%; min-height:100vh; border:0; border-radius:0; box-shadow:none; }
+@media(max-width:980px) {
+  .login-page { width:100%; min-height:100vh; }
+}
