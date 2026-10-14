@@ -2,6 +2,7 @@
 @using System.Text.Json
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
 @inject ISnackbar Snackbar
+@inject ISnackbar Snackbar
 
 <div class="page-wrap">
     <div class="management-heading">
@@ -35,7 +36,7 @@
         <MudPaper Class="content-card pa-5 mb-4" Elevation="0">
             <MudText Typo="Typo.h6" Class="mb-1">Create computers</MudText>
             <MudText Class="muted mb-4">Add one computer or a numbered range. Names are generated from the selected room.</MudText>
-            <MudGrid Spacing="2" AlignItems="AlignItems.Center">
+            <MudGrid Spacing="2">
                 <MudItem xs="12" sm="6" md="3">
                     <MudSelect T="int" @bind-Value="_selectedRoomId" Label="Room" Variant="Variant.Outlined" Dense="true">
                         @foreach (var room in _rooms)
