@@ -29,7 +29,7 @@
             <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Total Students</MudText><MudText Class="stat-number mt-3">@Metric("totalStudents", "TotalStudents", "studentCount", "StudentCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
             <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Registered PCs</MudText><MudText Class="stat-number mt-3">@Metric("totalPCs", "TotalPCs", "pcCount", "PCCount", "totalComputers")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
             <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Active Sessions</MudText><MudText Class="stat-number mt-3">@Metric("activeSessions", "ActiveSessions", "sessionCount", "SessionCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Available Vouchers</MudText><MudText Class="stat-number mt-3">@Metric("availableVouchers", "AvailableVouchers", "voucherCount", "VoucherCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
+            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Active Vouchers</MudText><MudText Class="stat-number mt-3">@Metric("activeVouchers", "ActiveVouchers", "availableVouchers", "AvailableVouchers", "voucherCount", "VoucherCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
         </MudGrid>
 
         <MudGrid Spacing="3" Class="mt-2">
@@ -64,7 +64,7 @@
             </MudStack>
             @if (_sessions.Count == 0)
             {
-                <MudText Class="muted pa-3">The API returned no session records, or its response format needs mapping.</MudText>
+                <MudText Class="muted pa-3">No laboratory sessions are in the database yet.</MudText>
             }
             else
             {

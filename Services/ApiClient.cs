@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace LaboratoryManagementSystem.Web.Services;
@@ -9,19 +10,25 @@ public sealed class ApiClient
 {
     private readonly HttpClient _http;
     private readonly IJSRuntime _js;
+    private readonly NavigationManager _navigation;
     private const string TokenKey = "lms_admin_token";
 
-    public ApiClient(HttpClient http, IJSRuntime js)
+    public ApiClient(HttpClient http, IJSRuntime js, NavigationManager navigation)
     {
         _http = http;
         _js = js;
+        _navigation = navigation;
     }
 
     public async Task<bool> LoginAdminAsync(string companyId, string password)
     {
-        var response = await _http.PostAsJsonAsync("api/login/admin",
+        using var response = await _http.PostAsJsonAsync("api/login/admin",
             new { companyID = companyId, password });
-        if (!response.IsSuccessStatusCode) return false;
+        if (!response.IsSuccessStatusCode)
+        {
+            await LogoutAsync();
+            return false;
+        }
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         if (!json.RootElement.TryGetProperty("token", out var tokenElement)) return false;
@@ -45,12 +52,20 @@ public sealed class ApiClient
 
     public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body = null)
     {
-        var request = new HttpRequestMessage(method, path);
+        using var request = new HttpRequestMessage(method, path);
         var token = await _js.InvokeAsync<string?>("sessionStorage.getItem", TokenKey);
         if (!string.IsNullOrWhiteSpace(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (body is not null) request.Content = JsonContent.Create(body);
-        return await _http.SendAsync(request);
+        var response = await _http.SendAsync(request);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            response.Dispose();
+            await LogoutAsync();
+            _navigation.NavigateTo("/login", replace: true);
+            return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
+        }
+        return response;
     }
 
     public async Task<T?> GetAsync<T>(string path)

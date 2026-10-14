@@ -1,0 +1,49 @@
+@using System.Text.Json
+
+<MudTextField @bind-Value="_search" Placeholder="Search records..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" Style="max-width:340px" />
+<MudTable Items="FilteredRows" Hover="true" Dense="true" Elevation="0">
+    <HeaderContent>
+        @foreach (var column in Columns)
+        {
+            <MudTh>@Label(column)</MudTh>
+        }
+    </HeaderContent>
+    <RowTemplate Context="row">
+        @foreach (var column in Columns)
+        {
+            <MudTd>@Read(row, column)</MudTd>
+        }
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText Class="muted pa-4">@EmptyMessage</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter] public IReadOnlyCollection<JsonElement> Items { get; set; } = Array.Empty<JsonElement>();
+    [Parameter] public string[] Columns { get; set; } = Array.Empty<string>();
+    [Parameter] public string EmptyMessage { get; set; } = "No records are in the database yet.";
+
+    private string _search = string.Empty;
+
+    private IEnumerable<JsonElement> FilteredRows => string.IsNullOrWhiteSpace(_search)
+        ? Items
+        : Items.Where(row => row.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private static string Label(string field) => System.Text.RegularExpressions.Regex.Replace(field, "([a-z0-9])([A-Z])", "$1 $2");
+
+    private static string Read(JsonElement row, string field)
+    {
+        if (row.ValueKind != JsonValueKind.Object) return "—";
+        foreach (var property in row.EnumerateObject())
+        {
+            if (!property.Name.Equals(field, StringComparison.OrdinalIgnoreCase)) continue;
+            var value = property.Value;
+            if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return "—";
+            if (value.ValueKind == JsonValueKind.True) return "Yes";
+            if (value.ValueKind == JsonValueKind.False) return "No";
+            return value.ToString();
+        }
+        return "—";
+    }
+}

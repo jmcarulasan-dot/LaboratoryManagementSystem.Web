@@ -26,7 +26,7 @@
             <MudSpacer />
             <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Color="Color.Error" />
             <MudAvatar Class="figma-profile-avatar" />
-            <div class="figma-profile"><b>Admin User</b><span>Administrator</span></div>
+            <div class="figma-profile"><b>@_adminName</b><span>@_adminCompanyId</span></div>
             <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
         </div>
         @Body
@@ -37,6 +37,28 @@
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
     [Inject] private LaboratoryManagementSystem.Web.Services.ApiClient Api { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
+    private string _adminName = "Administrator";
+    private string _adminCompanyId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var profile = await Api.GetAsync<System.Text.Json.JsonElement>("api/admin/me");
+            if (profile.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+            _adminName = Read(profile, "fullName", "FullName") ?? _adminName;
+            _adminCompanyId = Read(profile, "companyID", "CompanyID") ?? string.Empty;
+        }
+        catch { }
+    }
+
+    private static string? Read(System.Text.Json.JsonElement profile, params string[] keys)
+    {
+        foreach (var property in profile.EnumerateObject())
+            if (keys.Contains(property.Name, StringComparer.OrdinalIgnoreCase))
+                return property.Value.ValueKind == System.Text.Json.JsonValueKind.String ? property.Value.GetString() : property.Value.ToString();
+        return null;
+    }
     private async Task SignOut()
     {
         await Api.LogoutAsync();
