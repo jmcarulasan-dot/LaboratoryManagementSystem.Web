@@ -154,3 +154,58 @@ html, body, #app { background: var(--lms-page); color: var(--lms-ink); }
   .stat-number { font-size: 29px; }
   .figma-brand { padding: 18px 16px; }
 }
+
+
+/* Dashboard layout */
+.dashboard-page { padding-top: 30px; }
+.dashboard-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin:2px 0 26px; }
+.dashboard-eyebrow { display:flex; align-items:center; gap:8px; color:#7b8798; font-size:10px; font-weight:750; letter-spacing:.14em; margin-bottom:8px; }
+.dashboard-eyebrow span { width:7px; height:7px; border-radius:50%; background:var(--lms-primary); }
+.dashboard-heading .page-title { margin:0; }
+.dashboard-date { display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--lms-border); border-radius:10px; background:#fff; color:#66758b; font-size:12px; white-space:nowrap; }
+.dashboard-date .mud-icon-root { color:var(--lms-primary); }
+.dashboard-metrics { margin-bottom:4px; }
+.dashboard-stat { display:flex; flex-direction:column; gap:11px; min-height:157px; padding:19px 20px !important; }
+.dashboard-stat:before { width:3px; opacity:1; }
+.stat-topline { display:flex; align-items:center; gap:10px; }
+.stat-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; }
+.stat-icon .mud-icon-root { font-size:19px; }
+.stat-icon.students { color:#375e9b; background:#edf3ff; }
+.stat-icon.computers { color:#247567; background:#eaf6f2; }
+.stat-icon.sessions { color:#a36a17; background:#fff5e6; }
+.stat-icon.vouchers { color:#8a4d78; background:#f8eef6; }
+.stat-label { color:#778398; font-size:10px; font-weight:750; letter-spacing:.07em; }
+.dashboard-stat .stat-number { font-size:32px; line-height:1.05; }
+.stat-footnote { color:#8994a4; font-size:11px; }
+.dashboard-main-grid { margin-top:10px; }
+.dashboard-overview, .dashboard-actions, .dashboard-sessions { padding:22px !important; }
+.dashboard-card-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:20px; }
+.dashboard-card-title { color:var(--lms-ink); font-size:16px !important; font-weight:720 !important; letter-spacing:-.02em; }
+.dashboard-card-heading .muted { margin-top:4px; font-size:12px; }
+.live-indicator { display:flex; align-items:center; gap:7px; padding:6px 9px; color:#397360; background:#eff8f3; border-radius:20px; font-size:9px; font-weight:750; letter-spacing:.07em; }
+.live-indicator i { width:6px; height:6px; border-radius:50%; background:#38a274; }
+.summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.summary-item { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:56px; padding:11px 13px; border:1px solid #edf0f4; border-radius:10px; background:#fbfcfe; }
+.summary-label { color:#738095; font-size:12px; }
+.summary-value { color:#24344b; font-size:14px; font-weight:700; text-align:right; }
+.dashboard-empty { padding:20px 14px; color:#78869a; border:1px dashed #dce2eb; border-radius:10px; text-align:center; font-size:13px; }
+.action-list { display:flex; flex-direction:column; gap:7px; }
+.dashboard-action { display:flex; align-items:center; gap:12px; min-height:58px; padding:8px 10px; color:inherit; border:1px solid transparent; border-radius:11px; text-decoration:none; transition:background .15s ease,border-color .15s ease,transform .15s ease; }
+.dashboard-action:hover { background:#f7f8fb; border-color:#e7ebf1; transform:translateX(2px); }
+.action-icon { width:35px; height:35px; display:grid; place-items:center; flex:0 0 35px; color:var(--lms-primary); background:var(--lms-soft-red); border-radius:10px; }
+.action-icon .mud-icon-root { font-size:19px; }
+.dashboard-action > span:nth-child(2) { display:flex; flex:1; flex-direction:column; gap:3px; }
+.dashboard-action b { color:#26364b; font-size:12px; font-weight:680; }
+.dashboard-action small { color:#8792a2; font-size:10px; }
+.action-arrow { color:#9aa5b4; font-size:17px; }
+.dashboard-sessions { margin-top:22px; }
+.dashboard-sessions .dashboard-card-heading { margin-bottom:12px; }
+.dashboard-sessions .mud-table-cell { padding:13px 12px; }
+.dashboard-sessions .mud-table thead { background:#f8f9fb; }
+@media(max-width:700px) {
+  .dashboard-heading { align-items:flex-start; flex-direction:column; gap:14px; margin-bottom:20px; }
+  .dashboard-date { padding:8px 10px; }
+  .dashboard-overview,.dashboard-actions,.dashboard-sessions { padding:16px !important; }
+  .summary-grid { grid-template-columns:1fr; }
+  .dashboard-card-heading { align-items:flex-start; }
+}
