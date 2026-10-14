@@ -1,5 +1,7 @@
 @page "/students"
 @using System.Text.Json
+@using System.Text.RegularExpressions
+@inject IJSRuntime JS
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
 @inject ISnackbar Snackbar
 
@@ -32,8 +34,25 @@
             <MudGrid Spacing="2">
                 <MudItem xs="12" sm="6"><MudTextField @bind-Value="_studentNo" Label="Student number" Variant="Variant.Outlined" Required="true" /></MudItem>
                 <MudItem xs="12" sm="6"><MudTextField @bind-Value="_fullName" Label="Full name" Variant="Variant.Outlined" Required="true" /></MudItem>
-                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_courseSection" Label="Course / section" Variant="Variant.Outlined" Required="true" /></MudItem>
-                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_email" Label="Email address" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="_course" Label="Course" Variant="Variant.Outlined" Required="true">
+                        <MudSelectItem Value="@("BSIT")">BSIT</MudSelectItem>
+                        <MudSelectItem Value="@("BSA")">BSA</MudSelectItem>
+                        <MudSelectItem Value="@("BSBA")">BSBA</MudSelectItem>
+                        <MudSelectItem Value="@("BSHM")">BSHM</MudSelectItem>
+                        <MudSelectItem Value="@("BSCS")">BSCS</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="_year" Label="Year level" Variant="Variant.Outlined" Required="true">
+                        <MudSelectItem Value="@("1st Year")">1st Year</MudSelectItem>
+                        <MudSelectItem Value="@("2nd Year")">2nd Year</MudSelectItem>
+                        <MudSelectItem Value="@("3rd Year")">3rd Year</MudSelectItem>
+                        <MudSelectItem Value="@("4th Year")">4th Year</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_section" Label="Section" Placeholder="Example: A" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_email" Label="Gmail address" HelperText="Use a valid @gmail.com address." Variant="Variant.Outlined" Required="true" /></MudItem>
                 @if (!_editing)
                 {
                     <MudItem xs="12" sm="6"><MudTextField @bind-Value="_password" Label="Temporary password" InputType="InputType.Password" Variant="Variant.Outlined" Required="true" HelperText="At least 8 characters, including uppercase and lowercase letters." /></MudItem>
@@ -94,6 +113,7 @@
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => SetSuspension(context, true))">Suspend</MudButton>
                             }
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteStudent(context))">Delete</MudButton>
                         </MudStack>
                     </MudTd>
                 </RowTemplate>
@@ -115,7 +135,9 @@
     private string _originalStudentNo = "";
     private string _studentNo = "";
     private string _fullName = "";
-    private string _courseSection = "";
+    private string _course = "BSIT";
+    private string _year = "1st Year";
+    private string _section = "";
     private string _email = "";
     private string _password = "";
     private DateTime? _birthDate;
@@ -151,7 +173,7 @@
         _originalStudentNo = Read(row, "studentNo", "StudentNo");
         _studentNo = _originalStudentNo;
         _fullName = Read(row, "fullName", "FullName");
-        _courseSection = Read(row, "courseSection", "CourseSection");
+        LoadCourseSection(Read(row, "courseSection", "CourseSection"));
         _email = Read(row, "email", "Email");
         _birthDate = DateTime.TryParse(Read(row, "birthDate", "BirthDate"), out var date) ? date : null;
         _sex = Read(row, "sex", "Sex");
@@ -164,26 +186,35 @@
     private void CancelForm() => _formOpen = false;
     private void ClearForm()
     {
-        _originalStudentNo = _studentNo = _fullName = _courseSection = _email = _password = _contactNumber = _address = "";
+        _originalStudentNo = _studentNo = _fullName = _email = _password = _contactNumber = _address = _section = "";
+        _course = "BSIT";
+        _year = "1st Year";
         _birthDate = null;
         _sex = null;
     }
 
     private async Task SaveStudent()
     {
-        if (string.IsNullOrWhiteSpace(_studentNo) || string.IsNullOrWhiteSpace(_fullName) || string.IsNullOrWhiteSpace(_courseSection) || string.IsNullOrWhiteSpace(_email) ||
+        if (string.IsNullOrWhiteSpace(_studentNo) || string.IsNullOrWhiteSpace(_fullName) || string.IsNullOrWhiteSpace(_course) || string.IsNullOrWhiteSpace(_year) || string.IsNullOrWhiteSpace(_section) || string.IsNullOrWhiteSpace(_email) ||
             (!_editing && string.IsNullOrWhiteSpace(_password)))
         {
             Snackbar.Add("Complete all required fields.", Severity.Warning);
             return;
         }
 
+        if (!IsValidGmail(_email))
+        {
+            Snackbar.Add("Enter a valid Gmail address ending in @gmail.com.", Severity.Warning);
+            return;
+        }
+
+        var courseSection = $"{_course.Trim()} - {_year.Trim()} - {_section.Trim()}";
         _saving = true;
         try
         {
             var path = _editing ? $"api/admin/students/{Uri.EscapeDataString(_originalStudentNo)}" : "api/admin/students";
             object body = _editing
-                ? new { studentNo = _studentNo.Trim(), fullName = _fullName.Trim(), courseSection = _courseSection.Trim(), email = _email.Trim(), birthDate = _birthDate?.Date, sex = _sex, contactNumber = _contactNumber, address = _address }
+                ? new { studentNo = _studentNo.Trim(), fullName = _fullName.Trim(), courseSection = courseSection, email = _email.Trim(), birthDate = _birthDate?.Date, sex = _sex, contactNumber = _contactNumber, address = _address }
                 : new { studentNo = _studentNo.Trim(), fullName = _fullName.Trim(), courseSection = _courseSection.Trim(), email = _email.Trim(), password = _password };
             using var response = await Api.SendAsync(_editing ? HttpMethod.Put : HttpMethod.Post, path, body);
             if (!response.IsSuccessStatusCode)
@@ -213,6 +244,60 @@
         catch (Exception ex) { Snackbar.Add($"Student save failed: {ex.Message}", Severity.Error); }
         finally { _saving = false; }
     }
+
+    private async Task DeleteStudent(JsonElement row)
+    {
+        var studentNo = Read(row, "studentNo", "StudentNo");
+        if (string.IsNullOrWhiteSpace(studentNo) || studentNo == "—") return;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Delete student " + studentNo + "? Related lab records can prevent deletion.");
+        if (!confirmed) return;
+
+        try
+        {
+            using var response = await Api.SendAsync(HttpMethod.Delete, "api/admin/students/" + Uri.EscapeDataString(studentNo));
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Student account deleted.", Severity.Success);
+                await LoadStudents();
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                Snackbar.Add(string.IsNullOrWhiteSpace(detail) ? "Student could not be deleted." : detail.Trim('"'), Severity.Error);
+            }
+        }
+        catch (Exception ex) { Snackbar.Add("Delete failed: " + ex.Message, Severity.Error); }
+    }
+
+    private void LoadCourseSection(string value)
+    {
+        var parts = value.Split(" - ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var courses = new[] { "BSIT", "BSA", "BSBA", "BSHM", "BSCS" };
+        var years = new[] { "1st Year", "2nd Year", "3rd Year", "4th Year" };
+        if (parts.Length > 0 && courses.Contains(parts[0], StringComparer.OrdinalIgnoreCase))
+        {
+            _course = courses.First(x => x.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
+            if (parts.Length > 1 && years.Contains(parts[1], StringComparer.OrdinalIgnoreCase))
+            {
+                _year = years.First(x => x.Equals(parts[1], StringComparison.OrdinalIgnoreCase));
+                _section = parts.Length > 2 ? string.Join(" - ", parts.Skip(2)) : "";
+            }
+            else
+            {
+                _year = "1st Year";
+                _section = string.Join(" - ", parts.Skip(1));
+            }
+        }
+        else
+        {
+            _course = "BSIT";
+            _year = "1st Year";
+            _section = value;
+        }
+    }
+
+    private static bool IsValidGmail(string email) =>
+        Regex.IsMatch(email.Trim(), @"^[A-Z0-9._%+-]+@gmail\.com$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private async Task SetSuspension(JsonElement row, bool suspend)
     {
