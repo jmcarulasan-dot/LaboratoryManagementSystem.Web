@@ -55,7 +55,7 @@
                 <MudItem xs="12" sm="6"><MudTextField @bind-Value="_email" Label="Gmail address" HelperText="Enter a valid Gmail address ending in gmail.com." Variant="Variant.Outlined" Required="true" /></MudItem>
                 @if (!_editing)
                 {
-                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_password" Label="Temporary password" InputType="InputType.Password" Variant="Variant.Outlined" Required="true" HelperText="At least 8 characters, including uppercase and lowercase letters." /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_password" Label="Temporary password" InputType="InputType.Password" Variant="Variant.Outlined" Required="true" HelperText="At least 8 characters with uppercase, lowercase, a number, and a special character." /></MudItem>
                 }
                 else
                 {
@@ -220,7 +220,7 @@
             if (!response.IsSuccessStatusCode)
             {
                 var detail = await response.Content.ReadAsStringAsync();
-                Snackbar.Add(string.IsNullOrWhiteSpace(detail) ? "Student could not be saved." : detail.Trim('"'), Severity.Error);
+                Snackbar.Add(GetFriendlySaveError(detail), Severity.Error);
                 return;
             }
 
@@ -243,6 +243,61 @@
         }
         catch (Exception ex) { Snackbar.Add($"Student save failed: {ex.Message}", Severity.Error); }
         finally { _saving = false; }
+    }
+
+    private static string GetFriendlySaveError(string detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return "Student could not be saved. Please check the details and try again.";
+
+        try
+        {
+            using var document = JsonDocument.Parse(detail);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("errors", out var errors) &&
+                errors.ValueKind == JsonValueKind.Object)
+            {
+                if (errors.TryGetProperty("Password", out _) ||
+                    errors.TryGetProperty("password", out _))
+                {
+                    return "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.";
+                }
+
+                var messages = new List<string>();
+                foreach (var field in errors.EnumerateObject())
+                {
+                    var message = field.Value.ValueKind == JsonValueKind.Array
+                        ? string.Join(" ", field.Value.EnumerateArray()
+                            .Where(item => item.ValueKind == JsonValueKind.String)
+                            .Select(item => item.GetString())
+                            .Where(item => !string.IsNullOrWhiteSpace(item)))
+                        : field.Value.ToString();
+
+                    if (!string.IsNullOrWhiteSpace(message))
+                        messages.Add($"{field.Name}: {message}");
+                }
+
+                if (messages.Count > 0)
+                    return string.Join(" ", messages);
+            }
+
+            if (root.TryGetProperty("detail", out var detailProperty) &&
+                detailProperty.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(detailProperty.GetString()))
+                return detailProperty.GetString()!;
+
+            if (root.TryGetProperty("title", out var titleProperty) &&
+                titleProperty.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(titleProperty.GetString()))
+                return titleProperty.GetString()!;
+        }
+        catch (JsonException)
+        {
+            // The API returned plain text rather than a JSON validation response.
+        }
+
+        return detail.Trim().Trim('"');
     }
 
     private async Task DeleteStudent(JsonElement row)
