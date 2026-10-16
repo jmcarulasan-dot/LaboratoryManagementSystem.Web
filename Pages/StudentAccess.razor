@@ -62,7 +62,7 @@
                 <MudTextField @bind-Value="_voucherCode" Label="Voucher code" Variant="Variant.Outlined"
                               Required="true" RequiredError="Enter your voucher code." />
                 <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" FullWidth="true"
-                           Disabled="_busy || _selectedPcId <= 0 || string.IsNullOrWhiteSpace(_voucherCode) || !_pcs.Any(p => p.PCID == _selectedPcId && p.PCStatus == "Available")"
+                           Disabled="@(!CanTimeIn)"
                            OnClick="TimeInAsync">
                     @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
                     Start laboratory session
@@ -92,6 +92,11 @@
     private bool _busy;
     private int _selectedPcId;
     private List<StudentPcOption> _pcs = new();
+
+    private bool CanTimeIn => !_busy && _selectedPcId > 0 &&
+        !string.IsNullOrWhiteSpace(_voucherCode) &&
+        _pcs.Any(p => p.PCID == _selectedPcId &&
+            string.Equals(p.PCStatus, "Available", StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -209,7 +214,7 @@
                 var detail = await response.Content.ReadAsStringAsync();
                 SetMessage(string.IsNullOrWhiteSpace(detail)
                     ? "Time-in failed. Check your voucher, selected computer, and account status."
-                    : $"Time-in failed: {detail.Trim().Trim('"')}", Severity.Error);
+                    : $"Time-in failed: {CleanErrorDetail(detail)}", Severity.Error);
                 await RefreshPCsAsync();
                 return;
             }
@@ -241,6 +246,8 @@
         _voucherCode = string.Empty;
         SetMessage("You have signed out.", Severity.Info);
     }
+
+    private static string CleanErrorDetail(string detail) => detail.Trim().Trim('"');
 
     private void SetMessage(string message, Severity severity)
     {
