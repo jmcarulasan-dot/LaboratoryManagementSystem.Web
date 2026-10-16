@@ -3,14 +3,18 @@
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
 @inject NavigationManager Navigation
 
-<div class="page-wrap">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6">
+<div class="page-wrap dashboard-page">
+    <div class="dashboard-heading">
         <div>
+            <div class="dashboard-eyebrow"><span></span> LABORATORY MANAGEMENT</div>
             <MudText Typo="Typo.h4" Class="page-title">Dashboard</MudText>
-            <MudText Class="muted mt-1">Computer Laboratory System overview</MudText>
+            <MudText Class="muted mt-1">A clear view of your campus laboratory activity.</MudText>
         </div>
-        <MudButton Href="/login" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login">Admin sign in</MudButton>
-    </MudStack>
+        <div class="dashboard-date">
+            <MudIcon Icon="@Icons.Material.Outlined.CalendarToday" Size="Size.Small" />
+            <span>@DateTime.Now.ToString("dddd, MMMM d, yyyy")</span>
+        </div>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
@@ -21,55 +25,103 @@
     @if (_loading)
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Error" Class="mb-4" />
-        <MudText Class="muted">Loading dashboard from the LMS API...</MudText>
+        <MudText Class="muted">Loading dashboard data...</MudText>
     }
     else if (_dashboard.HasValue)
     {
-        <MudGrid Spacing="3">
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Total Students</MudText><MudText Class="stat-number mt-3">@Metric("totalStudents", "TotalStudents", "studentCount", "StudentCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Registered PCs</MudText><MudText Class="stat-number mt-3">@Metric("totalPCs", "TotalPCs", "pcCount", "PCCount", "totalComputers")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Active Sessions</MudText><MudText Class="stat-number mt-3">@Metric("activeSessions", "ActiveSessions", "sessionCount", "SessionCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Active Vouchers</MudText><MudText Class="stat-number mt-3">@Metric("activeVouchers", "ActiveVouchers", "availableVouchers", "AvailableVouchers", "voucherCount", "VoucherCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-        </MudGrid>
-
-        <MudGrid Spacing="3" Class="mt-2">
-            <MudItem xs="12" lg="7">
-                <MudCard Class="content-card pa-5" Elevation="0">
-                    <MudText Typo="Typo.h6" Style="font-weight:700">System Overview</MudText>
-                    <MudText Typo="Typo.body2" Class="muted mb-4">Summary returned by the API</MudText>
-                    <MudTable Items="_summaryRows" Dense="true" Hover="true" Elevation="0">
-                        <HeaderContent><MudTh>Metric</MudTh><MudTh>Value</MudTh></HeaderContent>
-                        <RowTemplate><MudTd>@context.Key</MudTd><MudTd>@context.Value</MudTd></RowTemplate>
-                    </MudTable>
+        <MudGrid Spacing="3" Class="dashboard-metrics">
+            <MudItem xs="12" sm="6" lg="3">
+                <MudCard Class="stat-card dashboard-stat" Elevation="0">
+                    <div class="stat-topline"><span class="stat-icon students"><MudIcon Icon="@Icons.Material.Outlined.Groups" /></span><span class="stat-label">TOTAL STUDENTS</span></div>
+                    <MudText Class="stat-number">@Metric("totalStudents", "TotalStudents", "studentCount", "StudentCount")</MudText>
+                    <div class="stat-footnote">Student accounts in the system</div>
                 </MudCard>
             </MudItem>
-            <MudItem xs="12" lg="5">
-                <MudCard Class="content-card pa-5" Elevation="0">
-                    <MudText Typo="Typo.h6" Style="font-weight:700">Quick Actions</MudText>
-                    <MudStack Spacing="2" Class="mt-4">
-                        <MudButton Href="/students" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.People">User Management</MudButton>
-                        <MudButton Href="/rooms-pcs" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Computer">Computer Management</MudButton>
-                        <MudButton Href="/sessions" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Schedule">Lab Sessions</MudButton>
-                        <MudButton Href="/vouchers" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ConfirmationNumber">Vouchers</MudButton>
-                        <MudButton Href="/reports" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.BarChart">Reports</MudButton>
-                    </MudStack>
+            <MudItem xs="12" sm="6" lg="3">
+                <MudCard Class="stat-card dashboard-stat" Elevation="0">
+                    <div class="stat-topline"><span class="stat-icon computers"><MudIcon Icon="@Icons.Material.Outlined.Computer" /></span><span class="stat-label">REGISTERED COMPUTERS</span></div>
+                    <MudText Class="stat-number">@Metric("totalPCs", "TotalPCs", "pcCount", "PCCount", "totalComputers")</MudText>
+                    <div class="stat-footnote">Computers across all lab rooms</div>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" lg="3">
+                <MudCard Class="stat-card dashboard-stat" Elevation="0">
+                    <div class="stat-topline"><span class="stat-icon sessions"><MudIcon Icon="@Icons.Material.Outlined.Schedule" /></span><span class="stat-label">ACTIVE SESSIONS</span></div>
+                    <MudText Class="stat-number">@Metric("activeSessions", "ActiveSessions", "sessionCount", "SessionCount")</MudText>
+                    <div class="stat-footnote">Students currently using the lab</div>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" lg="3">
+                <MudCard Class="stat-card dashboard-stat" Elevation="0">
+                    <div class="stat-topline"><span class="stat-icon vouchers"><MudIcon Icon="@Icons.Material.Outlined.ConfirmationNumber" /></span><span class="stat-label">AVAILABLE VOUCHERS</span></div>
+                    <MudText Class="stat-number">@Metric("activeVouchers", "ActiveVouchers", "availableVouchers", "AvailableVouchers", "voucherCount", "VoucherCount")</MudText>
+                    <div class="stat-footnote">Vouchers ready to be used</div>
                 </MudCard>
             </MudItem>
         </MudGrid>
 
-        <MudCard Class="content-card pa-5 mt-5" Elevation="0">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                <div><MudText Typo="Typo.h6" Style="font-weight:700">Lab Sessions</MudText><MudText Typo="Typo.body2" Class="muted">Records loaded from the API</MudText></div>
-                <MudButton Href="/sessions" Variant="Variant.Text" EndIcon="@Icons.Material.Filled.ArrowForward">View all</MudButton>
-            </MudStack>
+        <MudGrid Spacing="3" Class="dashboard-main-grid">
+            <MudItem xs="12" lg="8">
+                <MudCard Class="content-card dashboard-overview" Elevation="0">
+                    <div class="dashboard-card-heading">
+                        <div>
+                            <MudText Typo="Typo.h6" Class="dashboard-card-title">System overview</MudText>
+                            <MudText Typo="Typo.body2" Class="muted">Current totals reported by the LMS API</MudText>
+                        </div>
+                        <span class="live-indicator"><i></i> LIVE DATA</span>
+                    </div>
+                    @if (_summaryRows.Count == 0)
+                    {
+                        <div class="dashboard-empty">No additional summary metrics were returned.</div>
+                    }
+                    else
+                    {
+                        <div class="summary-grid">
+                            @foreach (var row in _summaryRows)
+                            {
+                                <div class="summary-item">
+                                    <span class="summary-label">@DisplayName(row.Key)</span>
+                                    <span class="summary-value">@row.Value</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" lg="4">
+                <MudCard Class="content-card dashboard-actions" Elevation="0">
+                    <div class="dashboard-card-heading">
+                        <div>
+                            <MudText Typo="Typo.h6" Class="dashboard-card-title">Quick access</MudText>
+                            <MudText Typo="Typo.body2" Class="muted">Common administration tasks</MudText>
+                        </div>
+                    </div>
+                    <div class="action-list">
+                        <a class="dashboard-action" href="/students"><span class="action-icon"><MudIcon Icon="@Icons.Material.Outlined.PeopleAlt" /></span><span><b>Students</b><small>Manage student accounts</small></span><MudIcon Class="action-arrow" Icon="@Icons.Material.Outlined.ArrowForward" /></a>
+                        <a class="dashboard-action" href="/rooms-pcs"><span class="action-icon"><MudIcon Icon="@Icons.Material.Outlined.Devices" /></span><span><b>Rooms &amp; computers</b><small>Review lab resources</small></span><MudIcon Class="action-arrow" Icon="@Icons.Material.Outlined.ArrowForward" /></a>
+                        <a class="dashboard-action" href="/sessions"><span class="action-icon"><MudIcon Icon="@Icons.Material.Outlined.AccessTime" /></span><span><b>Lab sessions</b><small>View attendance activity</small></span><MudIcon Class="action-arrow" Icon="@Icons.Material.Outlined.ArrowForward" /></a>
+                        <a class="dashboard-action" href="/reports"><span class="action-icon"><MudIcon Icon="@Icons.Material.Outlined.Assessment" /></span><span><b>Reports</b><small>Explore usage records</small></span><MudIcon Class="action-arrow" Icon="@Icons.Material.Outlined.ArrowForward" /></a>
+                    </div>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <MudCard Class="content-card dashboard-sessions" Elevation="0">
+            <div class="dashboard-card-heading">
+                <div>
+                    <MudText Typo="Typo.h6" Class="dashboard-card-title">Recent lab sessions</MudText>
+                    <MudText Typo="Typo.body2" Class="muted">The latest session records from your database</MudText>
+                </div>
+                <MudButton Href="/sessions" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Outlined.ArrowForward">View all</MudButton>
+            </div>
             @if (_sessions.Count == 0)
             {
-                <MudText Class="muted pa-3">No laboratory sessions are in the database yet.</MudText>
+                <div class="dashboard-empty">No lab sessions have been recorded yet.</div>
             }
             else
             {
                 <MudTable Items="_sessions" Dense="true" Hover="true" Elevation="0">
-                    <HeaderContent><MudTh>Student</MudTh><MudTh>Student No.</MudTh><MudTh>Room / PC</MudTh><MudTh>Time In</MudTh><MudTh>Status</MudTh></HeaderContent>
+                    <HeaderContent><MudTh>Student</MudTh><MudTh>Student number</MudTh><MudTh>Room / computer</MudTh><MudTh>Time in</MudTh><MudTh>Status</MudTh></HeaderContent>
                     <RowTemplate>
                         <MudTd>@Read(context, "fullName", "FullName", "studentName", "StudentName")</MudTd>
                         <MudTd>@Read(context, "studentNo", "StudentNo")</MudTd>
@@ -103,11 +155,24 @@
 
             var root = _dashboard.Value;
             if (root.ValueKind == JsonValueKind.Object)
-                _summaryRows = root.EnumerateObject().Select(p => new KeyValuePair<string, string>(p.Name, Format(p.Value))).ToList();
+            {
+                var primaryMetrics = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "totalStudents", "totalPCs", "totalComputers", "activeSessions", "activeVouchers",
+                    "studentCount", "pcCount", "sessionCount", "voucherCount",
+                    "TotalStudents", "TotalPCs", "TotalComputers", "ActiveSessions", "ActiveVouchers",
+                    "StudentCount", "PCCount", "SessionCount", "VoucherCount",
+                    "availableVouchers", "AvailableVouchers"
+                };
+                _summaryRows = root.EnumerateObject()
+                    .Where(p => !primaryMetrics.Contains(p.Name))
+                    .Select(p => new KeyValuePair<string, string>(p.Name, Format(p.Value)))
+                    .ToList();
+            }
 
             var sessions = await Api.GetAsync<JsonElement>("api/admin/sessions");
             if (sessions.ValueKind == JsonValueKind.Array)
-                _sessions = sessions.EnumerateArray().ToList();
+                _sessions = sessions.EnumerateArray().Take(8).ToList();
         }
         catch (Exception ex)
         {
@@ -132,11 +197,17 @@
         return "—";
     }
 
+    private static string DisplayName(string key)
+    {
+        var spaced = System.Text.RegularExpressions.Regex.Replace(key, "([a-z0-9])([A-Z])", "$1 $2");
+        return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(spaced.Replace("_", " ").Replace("-", " "));
+    }
+
     private static string Format(JsonElement value) => value.ValueKind switch
     {
         JsonValueKind.Null or JsonValueKind.Undefined => "—",
         JsonValueKind.String => value.GetString() ?? "—",
-        JsonValueKind.Object => "(object)",
+        JsonValueKind.Object => "Details",
         JsonValueKind.Array => $"{value.GetArrayLength()} items",
         JsonValueKind.True => "Yes",
         JsonValueKind.False => "No",
