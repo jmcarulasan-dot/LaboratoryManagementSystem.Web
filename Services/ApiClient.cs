@@ -13,6 +13,7 @@ public sealed class ApiClient
     private readonly IJSRuntime _js;
     private readonly NavigationManager _navigation;
     private const string TokenKey = "lms_admin_token";
+    private const string StudentTokenKey = "lms_student_token";
 
     public ApiClient(HttpClient http, IJSRuntime js, NavigationManager navigation)
     {
@@ -38,6 +39,41 @@ public sealed class ApiClient
 
         await _js.InvokeVoidAsync("sessionStorage.setItem", TokenKey, token);
         return true;
+    }
+
+    public async Task<bool> LoginStudentAsync(string studentNo, string password)
+    {
+        using var response = await _http.PostAsJsonAsync("api/login/student", new { studentNo, password });
+        if (!response.IsSuccessStatusCode) return false;
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        if (!json.RootElement.TryGetProperty("token", out var tokenElement)) return false;
+        var token = tokenElement.GetString();
+        if (string.IsNullOrWhiteSpace(token)) return false;
+        await _js.InvokeVoidAsync("sessionStorage.setItem", StudentTokenKey, token);
+        return true;
+    }
+
+    public async Task<HttpResponseMessage> SendStudentAsync(HttpMethod method, string path, object? body = null)
+    {
+        using var request = new HttpRequestMessage(method, path);
+        var token = await _js.InvokeAsync<string?>("sessionStorage.getItem", StudentTokenKey);
+        if (!string.IsNullOrWhiteSpace(token))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (body is not null) request.Content = JsonContent.Create(body);
+        return await _http.SendAsync(request);
+    }
+
+    public async Task<T?> GetStudentAsync<T>(string path)
+    {
+        using var response = await SendStudentAsync(HttpMethod.Get, path);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<T>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    }
+
+    public async Task<bool> StudentSendSuccessAsync(HttpMethod method, string path, object? body = null)
+    {
+        using var response = await SendStudentAsync(method, path, body);
+        return response.IsSuccessStatusCode;
     }
 
     public async Task<bool> HasAdminSessionAsync()
