@@ -1,0 +1,266 @@
+@page "/student-access"
+@layout LoginLayout
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Student Lab Access</PageTitle>
+
+<div class="student-access-shell">
+    <MudPaper Class="student-access-card pa-6 pa-md-8" Elevation="3" Square="false">
+        <MudStack Spacing="2" AlignItems="AlignItems.Center" Class="mb-6">
+            <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
+                <MudIcon Icon="@Icons.Material.Filled.Computer" Size="Size.Large" />
+            </MudAvatar>
+            <MudText Typo="Typo.h5" Align="Align.Center">Laboratory Access</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                Sign in with your student account, choose an available computer, and enter your voucher.
+            </MudText>
+        </MudStack>
+
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <MudAlert Severity="@_messageSeverity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+        }
+
+        @if (!_signedIn)
+        {
+            <MudForm @ref="_loginForm">
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="_studentNo" Label="Student number" Variant="Variant.Outlined"
+                                  Required="true" RequiredError="Enter your student number." />
+                    <MudTextField @bind-Value="_password" Label="Password" InputType="InputType.Password"
+                                  Variant="Variant.Outlined" Required="true" RequiredError="Enter your password." />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
+                               Disabled="_busy" OnClick="LoginAsync">
+                        @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                        Sign in
+                    </MudButton>
+                </MudStack>
+            </MudForm>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                <MudAlert Severity="Severity.Success" Variant="Variant.Text">
+                    Signed in as @_studentDisplay. Select a computer that is marked Available.
+                </MudAlert>
+                <MudSelect T="int" @bind-Value="_selectedPcId" Label="Available computer" Variant="Variant.Outlined"
+                           Required="true" RequiredError="Select an available computer." Disabled="_busy || _pcs.Count == 0">
+                    @foreach (var pc in _pcs.Where(p => string.Equals(p.PCStatus, "Available", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        <MudSelectItem T="int" Value="@pc.PCID">@pc.RoomName — @pc.PCName</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_pcs.Count == 0)
+                {
+                    <MudText Color="Color.Warning" Typo="Typo.body2">No computers are currently available. Please ask the laboratory staff.</MudText>
+                }
+                <MudTextField @bind-Value="_voucherCode" Label="Voucher code" Variant="Variant.Outlined"
+                              Required="true" RequiredError="Enter your voucher code." />
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" FullWidth="true"
+                           Disabled="@(!CanTimeIn)"
+                           OnClick="TimeInAsync">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                    Start laboratory session
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" FullWidth="true" Disabled="_busy" OnClick="RefreshPCsAsync">
+                    Refresh computer availability
+                </MudButton>
+                <MudDivider Class="my-1" />
+                <MudButton Variant="Variant.Text" Color="Color.Error" FullWidth="true" Disabled="_busy" OnClick="SignOutAsync">
+                    Sign out
+                </MudButton>
+            </MudStack>
+        }
+    </MudPaper>
+</div>
+
+@code {
+    private const string StudentTokenKey = "lms_student_token";
+    private MudForm? _loginForm;
+    private string _studentNo = string.Empty;
+    private string _password = string.Empty;
+    private string _voucherCode = string.Empty;
+    private string _studentDisplay = "Student";
+    private string _message = string.Empty;
+    private Severity _messageSeverity = Severity.Info;
+    private bool _signedIn;
+    private bool _busy;
+    private int _selectedPcId;
+    private List<StudentPcOption> _pcs = new();
+
+    private bool CanTimeIn => !_busy && _selectedPcId > 0 &&
+        !string.IsNullOrWhiteSpace(_voucherCode) &&
+        _pcs.Any(p => p.PCID == _selectedPcId &&
+            string.Equals(p.PCStatus, "Available", StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("sessionStorage.getItem", StudentTokenKey);
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                _signedIn = true;
+                _studentDisplay = "your student account";
+                await RefreshPCsAsync();
+            }
+        }
+        catch
+        {
+            // Browser storage may not be available during prerender or initial startup.
+        }
+    }
+
+    private async Task LoginAsync()
+    {
+        _message = string.Empty;
+        _busy = true;
+        try
+        {
+            if (_loginForm is not null)
+            {
+                await _loginForm.Validate();
+                if (!_loginForm.IsValid) return;
+            }
+
+            using var response = await Http.PostAsJsonAsync("api/login/student",
+                new { studentNo = _studentNo.Trim(), password = _password });
+            if (!response.IsSuccessStatusCode)
+            {
+                SetMessage("Sign-in failed. Check your student number and password, then try again.", Severity.Error);
+                return;
+            }
+
+            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            if (!json.RootElement.TryGetProperty("token", out var tokenElement) ||
+                string.IsNullOrWhiteSpace(tokenElement.GetString()))
+            {
+                SetMessage("The API did not return a student session token.", Severity.Error);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("sessionStorage.setItem", StudentTokenKey, tokenElement.GetString());
+            if (json.RootElement.TryGetProperty("data", out var data) &&
+                data.TryGetProperty("fullName", out var name))
+                _studentDisplay = name.GetString() ?? _studentNo;
+
+            _signedIn = true;
+            _password = string.Empty;
+            await RefreshPCsAsync();
+            SetMessage("Sign-in successful. Choose an available computer and enter your voucher.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not contact the LMS API. Check that the API is running. Details: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RefreshPCsAsync()
+    {
+        _message = string.Empty;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "api/student/pcs");
+            var token = await JS.InvokeAsync<string?>("sessionStorage.getItem", StudentTokenKey);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                _signedIn = false;
+                SetMessage("Please sign in again.", Severity.Warning);
+                return;
+            }
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await Http.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                SetMessage("Could not load computers. Refresh the page or sign in again.", Severity.Error);
+                return;
+            }
+
+            _pcs = await response.Content.ReadFromJsonAsync<List<StudentPcOption>>(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new();
+            if (!_pcs.Any(p => p.PCID == _selectedPcId && p.PCStatus == "Available"))
+                _selectedPcId = _pcs.FirstOrDefault(p => p.PCStatus == "Available")?.PCID ?? 0;
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not load computer availability: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task TimeInAsync()
+    {
+        _busy = true;
+        _message = string.Empty;
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("sessionStorage.getItem", StudentTokenKey);
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/student/sessions/time-in");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Content = JsonContent.Create(new { pcID = _selectedPcId, voucherCode = _voucherCode.Trim() });
+
+            using var response = await Http.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                SetMessage(string.IsNullOrWhiteSpace(detail)
+                    ? "Time-in failed. Check your voucher, selected computer, and account status."
+                    : $"Time-in failed: {CleanErrorDetail(detail)}", Severity.Error);
+                await RefreshPCsAsync();
+                return;
+            }
+
+            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            var pcName = json.RootElement.TryGetProperty("pcName", out var pc) ? pc.GetString() : "your selected computer";
+            SetMessage($"Success! Your laboratory session has started on {pcName}. Please follow laboratory rules and sign out when finished.", Severity.Success);
+            _voucherCode = string.Empty;
+            await RefreshPCsAsync();
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not complete time-in: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        await JS.InvokeVoidAsync("sessionStorage.removeItem", StudentTokenKey);
+        _signedIn = false;
+        _pcs.Clear();
+        _selectedPcId = 0;
+        _studentNo = string.Empty;
+        _password = string.Empty;
+        _voucherCode = string.Empty;
+        SetMessage("You have signed out.", Severity.Info);
+    }
+
+    private static string CleanErrorDetail(string detail) => detail.Trim().Trim('"');
+
+    private void SetMessage(string message, Severity severity)
+    {
+        _message = message;
+        _messageSeverity = severity;
+    }
+
+    private sealed class StudentPcOption
+    {
+        public int PCID { get; set; }
+        public int RoomID { get; set; }
+        public string RoomName { get; set; } = string.Empty;
+        public string PCName { get; set; } = string.Empty;
+        public string PCStatus { get; set; } = string.Empty;
+    }
+}
