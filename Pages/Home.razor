@@ -39,7 +39,7 @@
             </MudItem>
             <MudItem xs="12" sm="6" lg="3">
                 <MudCard Class="stat-card dashboard-stat" Elevation="0">
-                    <div class="stat-topline"><span class="stat-icon computers"><MudIcon Icon="@Icons.Material.Outlined.Computer" /></span><span class="stat-label">REGISTERED COMPUTERS</span></div>
+                    <div class="stat-topline"><span class="stat-icon computers"><MudIcon Icon="@Icons.Material.Outlined.Computer" /></span><span class="stat-label">TOTAL COMPUTERS</span></div>
                     <MudText Class="stat-number">@Metric("totalPCs", "TotalPCs", "pcCount", "PCCount", "totalComputers")</MudText>
                     <div class="stat-footnote">Computers across all lab rooms</div>
                 </MudCard>
@@ -53,9 +53,9 @@
             </MudItem>
             <MudItem xs="12" sm="6" lg="3">
                 <MudCard Class="stat-card dashboard-stat" Elevation="0">
-                    <div class="stat-topline"><span class="stat-icon vouchers"><MudIcon Icon="@Icons.Material.Outlined.ConfirmationNumber" /></span><span class="stat-label">AVAILABLE VOUCHERS</span></div>
-                    <MudText Class="stat-number">@Metric("activeVouchers", "ActiveVouchers", "availableVouchers", "AvailableVouchers", "voucherCount", "VoucherCount")</MudText>
-                    <div class="stat-footnote">Vouchers ready to be used</div>
+                    <div class="stat-topline"><span class="stat-icon vouchers"><MudIcon Icon="@Icons.Material.Outlined.Login" /></span><span class="stat-label">TODAY'S LOGINS</span></div>
+                    <MudText Class="stat-number">@_todayLogins</MudText>
+                    <div class="stat-footnote">Lab sessions started today</div>
                 </MudCard>
             </MudItem>
         </MudGrid>
@@ -138,6 +138,7 @@
 @code {
     private JsonElement? _dashboard;
     private List<JsonElement> _sessions = new();
+    private int _todayLogins;
     private List<KeyValuePair<string, string>> _summaryRows = new();
     private bool _loading = true;
     private string? _error;
@@ -172,7 +173,13 @@
 
             var sessions = await Api.GetAsync<JsonElement>("api/admin/sessions");
             if (sessions.ValueKind == JsonValueKind.Array)
-                _sessions = sessions.EnumerateArray().Take(8).ToList();
+            {
+                var allSessions = sessions.EnumerateArray().ToList();
+                _todayLogins = allSessions.Count(session =>
+                    DateTime.TryParse(Read(session, "timeIn", "TimeIn", "startTime", "StartTime"), out var timeIn) &&
+                    timeIn.Date == DateTime.Today);
+                _sessions = allSessions.Take(8).ToList();
+            }
         }
         catch (Exception ex)
         {
