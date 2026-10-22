@@ -7,7 +7,7 @@
 <div class="login-page">
     <section class="login-brand-panel">
         <div class="login-brand">
-            <div class="login-brand-symbol"><MudIcon Icon="@Icons.Material.Filled.LaptopChromebook" Size="Size.Large" /></div>
+            <img class="login-brand-logo" src="aclc-logo.png" alt="ACLC College of Mandaue" />
             <div><div class="login-brand-name">ACLC COLLEGE OF MANDAUE</div><div class="login-brand-caption">LABORATORY MANAGEMENT SYSTEM</div></div>
         </div>
         <div class="login-brand-copy">
@@ -20,17 +20,52 @@
     <section class="login-form-panel">
         <MudPaper Class="login-card" Elevation="0">
             <div class="login-card-heading">
-                <MudText Typo="Typo.h4" Class="login-title">Welcome back</MudText>
-                <MudText Class="login-subtitle">Enter your administrator credentials to continue.</MudText>
+                <MudText Typo="Typo.h4" Class="login-title">@(_challengeToken is null ? "Welcome back" : _requiresEnrollment ? "Set up your authenticator" : "Verify your sign-in")</MudText>
+                <MudText Class="login-subtitle">@(_challengeToken is null ? "Enter your administrator credentials to continue." : "Complete the secure second step to access the admin workspace.")</MudText>
             </div>
-            <MudForm @ref="_form">
-                <MudTextField @bind-Value="_companyId" Label="Company ID" Placeholder="Enter your company ID" Required="true" RequiredError="Company ID is required" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Badge" />
-                <MudTextField @bind-Value="_password" Label="Password" Placeholder="Enter your password" InputType="InputType.Password" Required="true" RequiredError="Password is required" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Lock" />
-                <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SignIn" Class="login-submit mt-5">
-                    @if (_busy) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" /> }
-                    @(_busy ? "Signing you in…" : "Sign in securely")
-                </MudButton>
-            </MudForm>
+            @if (_challengeToken is null)
+            {
+                <MudForm @ref="_form">
+                    <MudTextField @bind-Value="_companyId" Label="Company ID" Placeholder="Enter your company ID" Required="true" RequiredError="Company ID is required" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Badge" />
+                    <MudTextField @bind-Value="_password" Label="Password" Placeholder="Enter your password" InputType="InputType.Password" Required="true" RequiredError="Password is required" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Lock" />
+                    <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SignIn" Class="login-submit mt-5">
+                        @if (_busy) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" /> }
+                        @(_busy ? "Checking credentials…" : "Continue securely")
+                    </MudButton>
+                </MudForm>
+            }
+            else
+            {
+                <MudStack Spacing="3" Class="mfa-step">
+                    @if (_requiresEnrollment)
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                            Open Google Authenticator or Microsoft Authenticator, tap the plus button, and scan this QR code. Then enter the current six-digit code below.
+                        </MudAlert>
+                        @if (!string.IsNullOrWhiteSpace(_authenticatorQrCode))
+                        {
+                            <div class="mfa-qr-panel">
+                                <MudImage Src="@_authenticatorQrCode" Alt="Authenticator enrollment QR code" Class="mfa-qr-image" />
+                                <MudText Typo="Typo.caption" Class="muted">Scan with your authenticator app</MudText>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">The API did not provide an enrollment QR code. Update and restart the API, then start sign-in again.</MudAlert>
+                        }
+                    }
+                    else
+                    {
+                        <MudText Class="muted">Open your authenticator app and enter its current code.</MudText>
+                    }
+                    <MudTextField @bind-Value="_verificationCode" Label="Six-digit authenticator code" Variant="Variant.Outlined" Required="true" RequiredError="Enter the current six-digit code." MaxLength="6" InputMode="InputMode.numeric" />
+                    <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="VerifyMfa" Class="login-submit">
+                        @if (_busy) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" /> }
+                        @(_busy ? "Verifying…" : "Verify and sign in")
+                    </MudButton>
+                    <MudButton FullWidth="true" Variant="Variant.Text" Disabled="_busy" OnClick="BackToCredentials">Back to sign in</MudButton>
+                </MudStack>
+            }
             <div class="login-security-note"><MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" /><span>Your credentials are verified securely by the LMS API.</span></div>
             <MudDivider Class="my-5" />
             <MudText Typo="Typo.caption" Class="login-help">Need access? Contact your system administrator.</MudText>
@@ -44,6 +79,11 @@
     private string _companyId = "";
     private string _password = "";
     private bool _busy;
+    private string? _challengeToken;
+    private string? _authenticatorSetupUri;
+    private string? _authenticatorQrCode;
+    private string _verificationCode = string.Empty;
+    private bool _requiresEnrollment;
 
     private async Task SignIn()
     {
@@ -52,15 +92,57 @@
         _busy = true;
         try
         {
-            if (await Api.LoginAdminAsync(_companyId.Trim(), _password))
-                Navigation.NavigateTo("/");
-            else
-                Snackbar.Add("Sign-in failed. Check your Company ID and password, and make sure the API is running.", Severity.Error);
+            var challenge = await Api.BeginAdminLoginAsync(_companyId.Trim(), _password);
+            if (!challenge.Success)
+            {
+                Snackbar.Add(challenge.Error ?? "Sign-in failed. Check your Company ID and password.", Severity.Error);
+                return;
+            }
+
+            _challengeToken = challenge.ChallengeToken;
+            _requiresEnrollment = challenge.RequiresEnrollment;
+            _authenticatorSetupUri = challenge.AuthenticatorSetupUri;
+            _authenticatorQrCode = challenge.AuthenticatorQrCode;
+            _password = string.Empty;
+            _verificationCode = string.Empty;
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Could not connect to the LMS API: {ex.Message}", Severity.Error);
         }
         finally { _busy = false; }
+    }
+
+    private async Task VerifyMfa()
+    {
+        if (_challengeToken is null || _verificationCode.Length != 6 || !_verificationCode.All(char.IsDigit))
+        {
+            Snackbar.Add("Enter the current six-digit code from your authenticator app.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await Api.VerifyAdminMfaAsync(_challengeToken, _verificationCode);
+            if (result.Success)
+                Navigation.NavigateTo("/");
+            else
+                Snackbar.Add(result.Error ?? "The authenticator code was not accepted. Try the newest code in your app.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not verify the authenticator code: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private void BackToCredentials()
+    {
+        _challengeToken = null;
+        _authenticatorSetupUri = null;
+        _authenticatorQrCode = null;
+        _verificationCode = string.Empty;
+        _requiresEnrollment = false;
     }
 }

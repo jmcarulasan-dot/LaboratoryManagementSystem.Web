@@ -1,11 +1,12 @@
 @page "/settings"
 @using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
 @inject ISnackbar Snackbar
 
 <div class="page-wrap">
     <MudText Typo="Typo.h4" Class="page-title">Settings</MudText>
-    <MudText Class="muted mt-1 mb-6">Your signed-in admin account and password.</MudText>
+    <MudText Class="muted mt-1 mb-6">Manage your administrator profile and sign-in password.</MudText>
     @if (_loading)
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Error" Class="mb-4" />
@@ -17,19 +18,40 @@
     else
     {
         <MudPaper Elevation="0" Class="content-card pa-5 mb-5">
-            <MudText Typo="Typo.h6" Class="mb-4">Admin profile</MudText>
-            <MudText><b>Name:</b> @Read("fullName", "FullName")</MudText>
-            <MudText><b>Company ID:</b> @Read("companyID", "CompanyID")</MudText>
-            <MudText><b>Email:</b> @Read("email", "Email")</MudText>
+            <div class="management-section-heading">
+                <div><MudText Typo="Typo.h6">Admin profile</MudText><MudText Class="muted" Typo="Typo.body2">Update the details associated with your administrator account.</MudText></div>
+            </div>
+            <div class="d-flex align-center gap-4 mb-4">
+                <MudAvatar Size="Size.Large">
+                    @if (!string.IsNullOrWhiteSpace(_photoDataUrl))
+                    {
+                        <MudImage Src="@_photoDataUrl" Alt="Admin profile photo" />
+                    }
+                    else { @GetInitials() }
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle1">Profile picture</MudText>
+                    <MudText Typo="Typo.caption" Class="muted">JPG or PNG, up to 5 MB.</MudText>
+                    <InputFile OnChange="UploadPhoto" accept=".jpg,.jpeg,.png" />
+                </div>
+            </div>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_companyId" Label="Company ID" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_fullName" Label="Full name" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_email" Label="Gmail address" Variant="Variant.Outlined" Required="true" /></MudItem>
+            </MudGrid>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_savingProfile" OnClick="SaveProfile" Class="mt-4">@(_savingProfile ? "Saving…" : "Save profile")</MudButton>
         </MudPaper>
+
         <MudPaper Elevation="0" Class="content-card pa-5">
-            <MudText Typo="Typo.h6" Class="mb-4">Change password</MudText>
+            <MudText Typo="Typo.h6" Class="mb-1">Change password</MudText>
+            <MudText Class="muted mb-4" Typo="Typo.body2">Choose at least 8 characters, including uppercase and lowercase letters.</MudText>
             <MudForm @ref="_form">
                 <MudTextField @bind-Value="_currentPassword" Label="Current password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 <MudTextField @bind-Value="_newPassword" Label="New password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
                 <MudTextField @bind-Value="_confirmPassword" Label="Confirm new password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="ChangePassword" Class="mt-4">
-                    @(_saving ? "Saving…" : "Update password")
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_savingPassword" OnClick="ChangePassword" Class="mt-4">
+                    @(_savingPassword ? "Saving…" : "Update password")
                 </MudButton>
             </MudForm>
         </MudPaper>
@@ -39,11 +61,16 @@
 @code {
     private MudForm? _form;
     private JsonElement _profile;
+    private string _companyId = "";
+    private string _fullName = "";
+    private string _email = "";
+    private string? _photoDataUrl;
     private string _currentPassword = string.Empty;
     private string _newPassword = string.Empty;
     private string _confirmPassword = string.Empty;
     private bool _loading = true;
-    private bool _saving;
+    private bool _savingProfile;
+    private bool _savingPassword;
     private string? _error;
 
     protected override async Task OnInitializedAsync()
@@ -51,20 +78,104 @@
         try
         {
             var result = await Api.GetAsync<JsonElement>("api/admin/me");
-            if (result.ValueKind != JsonValueKind.Object) _error = "Your admin profile could not be loaded from the database.";
-            else _profile = result;
+            if (result.ValueKind != JsonValueKind.Object) _error = "Your admin profile could not be loaded. Check that the LMS API is running and updated.";
+            else
+            {
+                _profile = result;
+                _companyId = Read("companyID", "CompanyID");
+                _fullName = Read("fullName", "FullName");
+                _email = Read("email", "Email");
+                await LoadPhoto();
+            }
         }
-        catch (Exception ex) { _error = $"Unable to connect to the LMS API: {ex.Message}"; }
+        catch (Exception ex) { _error = $"Unable to load your admin profile: {ex.Message}"; }
         finally { _loading = false; }
     }
 
     private string Read(params string[] names)
     {
-        if (_profile.ValueKind != JsonValueKind.Object) return "—";
+        if (_profile.ValueKind != JsonValueKind.Object) return "";
         foreach (var property in _profile.EnumerateObject())
             if (names.Contains(property.Name, StringComparer.OrdinalIgnoreCase))
-                return property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? "—" : property.Value.ToString();
-        return "—";
+                return property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? "" : property.Value.ToString();
+        return "";
+    }
+
+    private async Task LoadPhoto()
+    {
+        var photo = await Api.GetAsync<JsonElement>("api/admin/me/photo");
+        if (photo.ValueKind == JsonValueKind.Object &&
+            photo.TryGetProperty("contentType", out var type) &&
+            photo.TryGetProperty("contentBase64", out var data))
+            _photoDataUrl = $"data:{type.GetString()};base64,{data.GetString()}";
+    }
+
+    private async Task UploadPhoto(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (extension is not (".jpg" or ".jpeg" or ".png"))
+        {
+            Snackbar.Add("Choose a JPG or PNG image.", Severity.Warning);
+            return;
+        }
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            Snackbar.Add("The profile picture must be 5 MB or smaller.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var response = await Api.UploadFileAsync(HttpMethod.Put, "api/admin/me/photo", "photo", file, 5 * 1024 * 1024);
+            if (!response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(await response.Content.ReadAsStringAsync(), Severity.Error);
+                return;
+            }
+            await LoadPhoto();
+            Snackbar.Add("Profile picture updated.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add("Could not upload the profile picture: " + ex.Message, Severity.Error); }
+    }
+
+    private string GetInitials()
+    {
+        var parts = _fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 1 ? $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant() : (parts.FirstOrDefault() ?? "A")[..1].ToUpperInvariant();
+    }
+
+    private async Task SaveProfile()
+    {
+        if (string.IsNullOrWhiteSpace(_companyId) || string.IsNullOrWhiteSpace(_fullName) || string.IsNullOrWhiteSpace(_email))
+        {
+            Snackbar.Add("Complete all profile fields.", Severity.Warning);
+            return;
+        }
+        if (!_email.Trim().EndsWith("@gmail.com", StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add("Admin email must be a Gmail address.", Severity.Warning);
+            return;
+        }
+
+        _savingProfile = true;
+        try
+        {
+            var ok = await Api.SendSuccessAsync(HttpMethod.Put, "api/admin/me", new
+            {
+                companyID = _companyId.Trim(),
+                fullName = _fullName.Trim(),
+                email = _email.Trim()
+            });
+            if (ok)
+            {
+                Snackbar.Add("Admin profile updated.", Severity.Success);
+                _profile = await Api.GetAsync<JsonElement>("api/admin/me");
+            }
+            else Snackbar.Add("Profile could not be updated. The Company ID may already be in use.", Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add($"Unable to update profile: {ex.Message}", Severity.Error); }
+        finally { _savingProfile = false; }
     }
 
     private async Task ChangePassword()
@@ -77,7 +188,7 @@
             return;
         }
 
-        _saving = true;
+        _savingPassword = true;
         try
         {
             var updated = await Api.SendSuccessAsync(HttpMethod.Put, "api/admin/me/password", new
@@ -92,9 +203,9 @@
                 _confirmPassword = string.Empty;
                 Snackbar.Add("Password updated.", Severity.Success);
             }
-            else Snackbar.Add("Password could not be updated. Check your current password and the API response.", Severity.Error);
+            else Snackbar.Add("Password could not be updated. Check your current password.", Severity.Error);
         }
-        catch (Exception ex) { Snackbar.Add($"Unable to connect to the LMS API: {ex.Message}", Severity.Error); }
-        finally { _saving = false; }
+        catch (Exception ex) { Snackbar.Add($"Unable to update password: {ex.Message}", Severity.Error); }
+        finally { _savingPassword = false; }
     }
 }

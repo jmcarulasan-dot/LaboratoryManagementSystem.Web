@@ -1,0 +1,304 @@
+@page "/staff"
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JS
+@inject LaboratoryManagementSystem.Web.Services.ApiClient Api
+@inject ISnackbar Snackbar
+
+<div class="page-wrap">
+    <div class="management-heading">
+        <div>
+            <MudText Typo="Typo.h4" Class="page-title">Staff accounts</MudText>
+            <MudText Class="muted mt-1">Create and update administrator accounts.</MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.PersonAdd" OnClick="StartNew">Add staff account</MudButton>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">@_error</MudAlert>
+    }
+    @if (!string.IsNullOrWhiteSpace(_twoFactorUri))
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="@(() => _twoFactorUri = null)">
+            <b>Save this authenticator setup link for the new staff member:</b><br />
+            <span class="setup-uri">@_twoFactorUri</span>
+        </MudAlert>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_proofDataUrl))
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="@(() => _proofDataUrl = null)">
+            <a href="@_proofDataUrl" target="_blank" rel="noopener">Open the selected staff member’s ID proof</a>
+        </MudAlert>
+    }
+
+    @if (_formOpen)
+    {
+        <MudPaper Class="content-card pa-5 mb-5" Elevation="0">
+            <MudText Typo="Typo.h6" Class="mb-4">@(_editingId.HasValue ? "Edit staff profile" : "Create staff account")</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_companyId" Label="Company ID" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_fullName" Label="Full name" Variant="Variant.Outlined" Required="true" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_email" Label="Gmail address" Variant="Variant.Outlined" Required="true" /></MudItem>
+                @if (!_editingId.HasValue)
+                {
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_password" Label="Temporary password" InputType="InputType.Password" Variant="Variant.Outlined" Required="true" HelperText="At least 8 characters, with uppercase and lowercase letters." /></MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.subtitle2" Class="mb-1">School or employee ID proof *</MudText>
+                        <InputFile OnChange="SelectProof" accept=".jpg,.jpeg,.png,.pdf" />
+                        <MudText Typo="Typo.caption" Class="muted">Required. JPG, PNG, or PDF, up to 5 MB. Keep the ID image readable.</MudText>
+                        @if (!string.IsNullOrWhiteSpace(_proofFileName))
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-1">Selected: @_proofFileName</MudText>
+                        }
+                    </MudItem>
+                }
+            </MudGrid>
+            <MudStack Row="true" Spacing="2" Class="mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveStaff">@(_saving ? "Saving…" : _editingId.HasValue ? "Save changes" : "Create account")</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="CancelForm">Cancel</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudPaper Class="content-card pa-4" Elevation="0">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+            <MudTextField @bind-Value="_search" Placeholder="Search staff..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:360px" />
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="LoadStaff">Refresh</MudButton>
+        </MudStack>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Error" />
+        }
+        else if (_staff.Count == 0)
+        {
+            <MudText Class="muted pa-4">No administrator accounts were returned by the API.</MudText>
+        }
+        else
+        {
+            <MudTable Items="FilteredStaff" Hover="true" Dense="true" Elevation="0">
+                <HeaderContent><MudTh>Company ID</MudTh><MudTh>Name</MudTh><MudTh>Email</MudTh><MudTh>Created</MudTh><MudTh></MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@Read(context, "companyID", "CompanyID")</MudTd>
+                    <MudTd>@Read(context, "fullName", "FullName")</MudTd>
+                    <MudTd>@Read(context, "email", "Email")</MudTd>
+                    <MudTd>@Read(context, "createdAt", "CreatedAt")</MudTd>
+                    <MudTd>
+                        <MudStack Row="true" Spacing="1">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => EditStaff(context))">Edit</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ViewProof(context))">View ID proof</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteStaff(context))">Delete</MudButton>
+                        </MudStack>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+</div>
+
+@code {
+    private List<JsonElement> _staff = new();
+    private IEnumerable<JsonElement> FilteredStaff => string.IsNullOrWhiteSpace(_search) ? _staff : _staff.Where(x => x.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase));
+    private bool _loading = true;
+    private bool _saving;
+    private bool _formOpen;
+    private string? _error;
+    private string? _twoFactorUri;
+    private string _search = "";
+    private int? _editingId;
+    private string _companyId = "";
+    private string _fullName = "";
+    private string _email = "";
+    private string _password = "";
+    private string _proofFileName = "";
+    private string _proofBase64 = "";
+    private string? _proofDataUrl;
+    private int? _myAdminId;
+
+    protected override async Task OnInitializedAsync() => await LoadStaff();
+
+    private async Task LoadStaff()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await Api.GetAsync<JsonElement>("api/admin");
+            if (result.ValueKind == JsonValueKind.Array) _staff = result.EnumerateArray().ToList();
+            else _error = "Staff accounts could not be loaded. Check your admin session and API connection.";
+            var me = await Api.GetAsync<JsonElement>("api/admin/me");
+            if (me.ValueKind == JsonValueKind.Object && int.TryParse(Read(me, "adminID", "AdminID"), out var myId))
+                _myAdminId = myId;
+        }
+        catch (Exception ex) { _error = $"Unable to load staff accounts: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private void StartNew()
+    {
+        _editingId = null;
+        _companyId = _fullName = _email = _password = _proofFileName = _proofBase64 = "";
+        _formOpen = true;
+    }
+
+    private void EditStaff(JsonElement row)
+    {
+        _editingId = ReadInt(row, "adminID", "AdminID");
+        _companyId = Read(row, "companyID", "CompanyID");
+        _fullName = Read(row, "fullName", "FullName");
+        _email = Read(row, "email", "Email");
+        _password = "";
+        _formOpen = _editingId.HasValue;
+    }
+
+    private void CancelForm() => _formOpen = false;
+
+    private async Task SaveStaff()
+    {
+        if (string.IsNullOrWhiteSpace(_companyId) || string.IsNullOrWhiteSpace(_fullName) || string.IsNullOrWhiteSpace(_email) ||
+            (!_editingId.HasValue && string.IsNullOrWhiteSpace(_password)))
+        {
+            Snackbar.Add("Complete all required fields.", Severity.Warning);
+            return;
+        }
+        if (!IsValidGmail(_email))
+        {
+            Snackbar.Add("Enter a valid Gmail address ending in @gmail.com.", Severity.Warning);
+            return;
+        }
+        if (!_editingId.HasValue && (string.IsNullOrWhiteSpace(_proofFileName) || string.IsNullOrWhiteSpace(_proofBase64)))
+        {
+            Snackbar.Add("Upload a school or employee ID proof before creating the account.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var path = _editingId.HasValue ? $"api/admin/{_editingId.Value}" : "api/admin";
+            var body = _editingId.HasValue
+                ? (object)new { companyID = _companyId.Trim(), fullName = _fullName.Trim(), email = _email.Trim() }
+                : new { companyID = _companyId.Trim(), fullName = _fullName.Trim(), email = _email.Trim(), password = _password, companyIDProofFileName = _proofFileName, companyIDProofBase64 = _proofBase64 };
+            using var response = await Api.SendAsync(_editingId.HasValue ? HttpMethod.Put : HttpMethod.Post, path, body);
+            if (!response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(await ReadError(response), Severity.Error);
+                return;
+            }
+
+            if (!_editingId.HasValue)
+            {
+                try
+                {
+                    using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+                    if (json.RootElement.TryGetProperty("twoFactorSetupUri", out var uri))
+                        _twoFactorUri = uri.GetString();
+                }
+                catch { }
+                Snackbar.Add("Staff account created.", Severity.Success);
+            }
+            else Snackbar.Add("Staff profile updated.", Severity.Success);
+
+            _formOpen = false;
+            await LoadStaff();
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save staff account: {ex.Message}", Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task SelectProof(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (extension is not (".jpg" or ".jpeg" or ".png" or ".pdf"))
+        {
+            Snackbar.Add("Choose a JPG, PNG, or PDF file.", Severity.Warning);
+            return;
+        }
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            Snackbar.Add("The ID proof must be 5 MB or smaller.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            _proofFileName = file.Name;
+            _proofBase64 = Convert.ToBase64String(memory.ToArray());
+        }
+        catch (Exception ex)
+        {
+            _proofFileName = _proofBase64 = "";
+            Snackbar.Add("Could not read the ID proof: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ViewProof(JsonElement row)
+    {
+        var id = Read(row, "adminID", "AdminID");
+        if (!int.TryParse(id, out var adminId)) return;
+        try
+        {
+            using var response = await Api.SendAsync(HttpMethod.Get, $"api/admin/{adminId}/company-id-proof");
+            if (!response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("No ID proof is available for this account yet.", Severity.Warning);
+                return;
+            }
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+            _proofDataUrl = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (Exception ex) { Snackbar.Add("Could not load the ID proof: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task DeleteStaff(JsonElement row)
+    {
+        var id = ReadInt(row, "adminID", "AdminID");
+        if (!id.HasValue) return;
+        if (id == _myAdminId)
+        {
+            Snackbar.Add("You cannot delete the account you are signed in with.", Severity.Warning);
+            return;
+        }
+        var companyId = Read(row, "companyID", "CompanyID");
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete staff account " + companyId + "? This cannot be undone.")) return;
+        try
+        {
+            using var response = await Api.SendAsync(HttpMethod.Delete, $"api/admin/{id.Value}");
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Staff account deleted.", Severity.Success);
+                await LoadStaff();
+            }
+            else Snackbar.Add(await ReadError(response), Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("Delete failed: " + ex.Message, Severity.Error); }
+    }
+
+    private static bool IsValidGmail(string email) =>
+        System.Text.RegularExpressions.Regex.IsMatch(email.Trim(), @"^[A-Z0-9._%+-]+@gmail\.com$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static async Task<string> ReadError(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        return string.IsNullOrWhiteSpace(body) ? $"Request failed ({(int)response.StatusCode})." : body.Trim('"');
+    }
+
+    private static string Read(JsonElement row, params string[] keys)
+    {
+        if (row.ValueKind != JsonValueKind.Object) return "";
+        foreach (var p in row.EnumerateObject())
+            if (keys.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
+                return p.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? "" : p.Value.ToString();
+        return "";
+    }
+
+    private static int? ReadInt(JsonElement row, params string[] keys) =>
+        int.TryParse(Read(row, keys), out var value) ? value : null;
+}

@@ -6,13 +6,20 @@
 <MudLayout>
     <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="250px" Class="figma-sidebar">
         <div class="figma-brand">
-            <div class="figma-brand-mark"><MudIcon Icon="@Icons.Material.Filled.ChangeHistory" Size="Size.Large" /></div>
-            <div><div class="figma-brand-title">Software Lab</div><div class="figma-brand-subtitle">Admin Portal</div></div>
+            <img class="figma-brand-logo" src="aclc-logo.png" alt="ACLC College of Mandaue" />
+            <div>
+                <div class="figma-brand-title">Software Lab</div>
+                <div class="figma-brand-subtitle">Admin Portal</div>
+            </div>
         </div>
+        <MudText Class="nav-section-title">WORKSPACE</MudText>
         <MudNavMenu Class="figma-nav">
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Dashboard</MudNavLink>
             <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.PeopleAlt">User Management</MudNavLink>
+            <MudNavLink Href="/staff" Icon="@Icons.Material.Outlined.Badge">Staff Accounts</MudNavLink>
             <MudNavLink Href="/rooms-pcs" Icon="@Icons.Material.Outlined.Computer">Computer Management</MudNavLink>
+            <MudNavLink Href="/sessions" Icon="@Icons.Material.Outlined.Schedule">Lab Sessions</MudNavLink>
+            <MudNavLink Href="/vouchers" Icon="@Icons.Material.Outlined.ConfirmationNumber">Vouchers</MudNavLink>
             <MudNavLink Href="/logs" Icon="@Icons.Material.Outlined.ReceiptLong">Log Management</MudNavLink>
             <MudNavLink Href="/reports" Icon="@Icons.Material.Outlined.BarChart">Reports</MudNavLink>
             <MudNavLink Href="/notifications" Icon="@Icons.Material.Outlined.Notifications">Notifications</MudNavLink>
@@ -24,10 +31,17 @@
         <div class="figma-topbar">
             <MudIconButton Icon="@Icons.Material.Filled.Menu" OnClick="ToggleDrawer" Class="mobile-menu" />
             <MudSpacer />
-            <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Color="Color.Error" />
-            <MudAvatar Class="figma-profile-avatar" />
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="admin-role-chip">ADMINISTRATOR</MudChip>
+            <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Class="topbar-icon" aria-label="Notifications" />
+            <MudAvatar Class="figma-profile-avatar">
+                @if (!string.IsNullOrWhiteSpace(_profilePhotoUrl))
+                {
+                    <MudImage Src="@_profilePhotoUrl" Alt="Admin profile photo" />
+                }
+                else { @GetInitials() }
+            </MudAvatar>
             <div class="figma-profile"><b>@_adminName</b><span>@_adminCompanyId</span></div>
-            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
         </div>
         @Body
     </MudMainContent>
@@ -39,6 +53,7 @@
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     private string _adminName = "Administrator";
     private string _adminCompanyId = string.Empty;
+    private string? _profilePhotoUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -48,8 +63,21 @@
             if (profile.ValueKind != System.Text.Json.JsonValueKind.Object) return;
             _adminName = Read(profile, "fullName", "FullName") ?? _adminName;
             _adminCompanyId = Read(profile, "companyID", "CompanyID") ?? string.Empty;
+            var photo = await Api.GetAsync<System.Text.Json.JsonElement>("api/admin/me/photo");
+            if (photo.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                photo.TryGetProperty("contentType", out var contentType) &&
+                photo.TryGetProperty("contentBase64", out var contentBase64))
+                _profilePhotoUrl = $"data:{contentType.GetString()};base64,{contentBase64.GetString()}";
         }
         catch { }
+    }
+
+    private string GetInitials()
+    {
+        var parts = _adminName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 1
+            ? $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[^1][0])}"
+            : parts.Length == 1 ? parts[0][..1].ToUpperInvariant() : "A";
     }
 
     private static string? Read(System.Text.Json.JsonElement profile, params string[] keys)
@@ -59,14 +87,16 @@
                 return property.Value.ValueKind == System.Text.Json.JsonValueKind.String ? property.Value.GetString() : property.Value.ToString();
         return null;
     }
+
     private async Task SignOut()
     {
         await Api.LogoutAsync();
         Navigation.NavigateTo("/login", replace: true);
     }
+
     private MudTheme _theme = new()
     {
-        PaletteLight = new PaletteLight { Primary = "#bd171d", Secondary = "#7b8497", Background = "#ffffff", Surface = "#ffffff", AppbarBackground = "#ffffff", AppbarText = "#172033" },
+        PaletteLight = new PaletteLight { Primary = "#b4232c", Secondary = "#66758b", Background = "#f4f6fa", Surface = "#ffffff", AppbarBackground = "#ffffff", AppbarText = "#17243a" },
         LayoutProperties = new LayoutProperties { DefaultBorderRadius = "12px" }
     };
 }

@@ -1,32 +1,301 @@
 @page "/vouchers"
 @using System.Text.Json
+@using System.Net.Http.Json
+@inject IJSRuntime JS
 @inject LaboratoryManagementSystem.Web.Services.ApiClient Api
+@inject ISnackbar Snackbar
 
 <div class="page-wrap">
-    <MudText Typo="Typo.h4" Class="page-title">Vouchers</MudText>
-    <MudText Class="muted mt-1 mb-6">Vouchers currently recorded in the LMS database.</MudText>
-    @if (_loading) { <MudProgressLinear Indeterminate="true" Color="Color.Error" Class="mb-4" /> }
-    else if (!string.IsNullOrWhiteSpace(_error)) { <MudAlert Severity="Severity.Warning" Class="mb-4">@_error</MudAlert> }
-    <MudPaper Elevation="0" Class="content-card pa-5">
-        <ApiDataTable Items="_rows" Columns="_columns" EmptyMessage="No vouchers are in the database yet." />
+    <div class="management-heading">
+        <div>
+            <MudText Typo="Typo.h4" Class="page-title">Vouchers</MudText>
+            <MudText Class="muted mt-1">Generate access codes and review their status.</MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.AddCard" OnClick="@(() => _formOpen = !_formOpen)">Generate vouchers</MudButton>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">@_error</MudAlert>
+    }
+    @if (_generated.Count > 0)
+    {
+        <MudPaper Class="content-card voucher-generated pa-5 mb-4" Elevation="0">
+            <MudText Typo="Typo.h6" Class="mb-1">New voucher codes</MudText>
+            <MudText Class="muted mb-3">These codes are not sent automatically. Give one code to each student for use at a lab PC.</MudText>
+            <div class="voucher-code-grid">
+                @foreach (var voucher in _generated)
+                {
+                    <div class="voucher-code">@Read(voucher, "voucherCode", "VoucherCode")</div>
+                }
+            </div>
+            <MudStack Row="true" Spacing="1" Class="mt-3 voucher-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ContentCopy" OnClick="CopyGeneratedBatch">Copy batch</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Print" OnClick="@(() => PrintCodes(_generated))">Print slips</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => _generated.Clear())">Hide codes</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+    @if (_formOpen)
+    {
+        <MudPaper Class="content-card pa-5 mb-4" Elevation="0">
+            <MudText Typo="Typo.h6" Class="mb-1">Create a voucher batch</MudText>
+            <MudText Class="muted mb-4">Each code can be used once. The API allows 1 to 500 codes per batch.</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6" md="4"><MudNumericField T="int" @bind-Value="_quantity" Label="Number of vouchers" Min="1" Max="500" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="4"><MudDatePicker @bind-Date="_expiresAt" Label="Expiration date (optional)" Variant="Variant.Outlined" Clearable="true" /></MudItem>
+            </MudGrid>
+            <MudStack Row="true" Spacing="2" Class="mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="Generate">@(_saving ? "Generating…" : "Generate batch")</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="@(() => _formOpen = false)">Cancel</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudPaper Elevation="0" Class="content-card pa-4">
+        <div class="management-section-heading">
+            <div>
+                <MudText Typo="Typo.h6">Voucher records</MudText>
+                <MudText Class="muted" Typo="Typo.body2">@_rows.Count record(s) · @DistributableVouchers.Count ready to distribute</MudText>
+            </div>
+            <MudStack Row="true" Spacing="1" Class="voucher-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ContentCopy" Disabled="@(!DistributableVouchers.Any())" OnClick="CopyAvailable">Copy active codes</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Print" Disabled="@(!DistributableVouchers.Any())" OnClick="@(() => PrintCodes(DistributableVouchers))">Print slips</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Download" Disabled="@(!DistributableVouchers.Any())" OnClick="DownloadAvailable">Download CSV</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="LoadVouchers">Refresh</MudButton>
+            </MudStack>
+        </div>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Give one active code to one student. They enter it on the lab PC lock screen; each code works once.
+        </MudAlert>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Error" />
+        }
+        else if (_rows.Count == 0)
+        {
+            <div class="management-empty">No vouchers are in the database yet.</div>
+        }
+        else
+        {
+            <MudTable Items="_rows" Hover="true" Dense="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Code</MudTh><MudTh>Student number</MudTh><MudTh>Student name</MudTh><MudTh>Status</MudTh>
+                    <MudTh>Created</MudTh><MudTh>Expires</MudTh><MudTh>Used</MudTh><MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><b>@Read(context, "VoucherCode", "voucherCode")</b></MudTd>
+                    <MudTd>@Read(context, "StudentNo", "studentNo")</MudTd>
+                    <MudTd>@Read(context, "StudentName", "studentName")</MudTd>
+                    <MudTd><span class="status-pill @(IsCancelled(context) ? "maintenance" : "available")">@Read(context, "Status", "status")</span></MudTd>
+                    <MudTd>@Read(context, "CreatedAt", "createdAt")</MudTd>
+                    <MudTd>@Read(context, "ExpiresAt", "expiresAt")</MudTd>
+                    <MudTd>@Read(context, "UsedAt", "usedAt")</MudTd>
+                    <MudTd>
+                        <MudStack Row="true" Spacing="0" Class="voucher-row-actions">
+                        @if (CanDistribute(context))
+                        {
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.ContentCopy" Color="Color.Primary" aria-label="Copy voucher code" OnClick="@(() => CopyCode(context))" />
+                        }
+                        @if (CanCancel(context))
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => CancelVoucher(context))">Cancel voucher</MudButton>
+                        }
+                        @if (!CanCancel(context) && !CanDistribute(context))
+                        {
+                            <MudText Typo="Typo.caption" Class="muted">—</MudText>
+                        }
+                        </MudStack>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
     </MudPaper>
 </div>
 
 @code {
-    private readonly string[] _columns = ["VoucherCode", "StudentNo", "StudentName", "Status", "CreatedAt", "ExpiresAt", "UsedAt"];
     private IReadOnlyCollection<JsonElement> _rows = Array.Empty<JsonElement>();
+    private List<JsonElement> _generated = new();
+    private IReadOnlyList<JsonElement> DistributableVouchers => _rows.Where(CanDistribute).ToArray();
     private bool _loading = true;
+    private bool _saving;
+    private bool _formOpen;
     private string? _error;
+    private int _quantity = 10;
+    private DateTime? _expiresAt;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadVouchers();
+
+    private async Task LoadVouchers()
     {
+        _loading = true;
+        _error = null;
         try
         {
             var result = await Api.GetAsync<JsonElement>("api/admin/vouchers");
-            if (result.ValueKind != JsonValueKind.Array) _error = "Vouchers could not be loaded. Check your admin session and the API/database connection.";
+            if (result.ValueKind != JsonValueKind.Array)
+                _error = "Vouchers could not be loaded. Check your admin session and API/database connection.";
             else _rows = result.EnumerateArray().ToArray();
         }
         catch (Exception ex) { _error = $"Unable to connect to the LMS API: {ex.Message}"; }
         finally { _loading = false; }
+    }
+
+    private async Task CancelVoucher(JsonElement row)
+    {
+        if (!int.TryParse(Read(row, "VoucherID", "voucherID"), out var id) || id <= 0) return;
+        var code = Read(row, "VoucherCode", "voucherCode");
+        if (!await JS.InvokeAsync<bool>("confirm", "Cancel unused voucher " + code + "? It will be retained as a cancelled record.")) return;
+
+        try
+        {
+            using var response = await Api.SendAsync(HttpMethod.Put, "api/admin/vouchers/" + id + "/cancel");
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Unused voucher cancelled. Its record was retained.", Severity.Success);
+                await LoadVouchers();
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                Snackbar.Add(string.IsNullOrWhiteSpace(detail) ? "Voucher could not be cancelled." : detail.Trim('"'), Severity.Error);
+            }
+        }
+        catch (Exception ex) { Snackbar.Add("Voucher cancellation failed: " + ex.Message, Severity.Error); }
+    }
+
+    private static bool CanCancel(JsonElement row) =>
+        CanDistribute(row);
+
+    private static bool CanDistribute(JsonElement row) =>
+        Read(row, "Status", "status").Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+        (Read(row, "StudentID", "studentID") is "—" or "" or "0") &&
+        (Read(row, "UsedAt", "usedAt") is "—" or "");
+
+    private static bool IsCancelled(JsonElement row) =>
+        Read(row, "Status", "status").Equals("Cancelled", StringComparison.OrdinalIgnoreCase);
+
+    private async Task Generate()
+    {
+        if (_quantity < 1 || _quantity > 500) { Snackbar.Add("Choose a quantity from 1 to 500.", Severity.Warning); return; }
+        if (_expiresAt.HasValue && _expiresAt.Value.Date <= DateTime.Today)
+        {
+            Snackbar.Add("Expiration date must be in the future.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            using var response = await Api.SendAsync(HttpMethod.Post, "api/admin/vouchers", new
+            {
+                quantity = _quantity,
+                expiresAt = _expiresAt?.Date
+            });
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                Snackbar.Add(string.IsNullOrWhiteSpace(body) ? "Voucher generation failed." : body.Trim('"'), Severity.Error);
+                return;
+            }
+
+            _generated = await response.Content.ReadFromJsonAsync<List<JsonElement>>() ?? new();
+            Snackbar.Add($"{_generated.Count} voucher(s) generated.", Severity.Success);
+            _formOpen = false;
+            await LoadVouchers();
+        }
+        catch (Exception ex) { Snackbar.Add($"Voucher generation failed: {ex.Message}", Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private Task CopyGeneratedBatch() => CopyCodes(_generated, "New batch");
+
+    private Task CopyAvailable() => CopyCodes(DistributableVouchers, "Active vouchers");
+
+    private async Task CopyCode(JsonElement voucher)
+    {
+        if (!CanDistribute(voucher)) return;
+        await CopyCodes(new[] { voucher }, "Voucher");
+    }
+
+    private async Task CopyCodes(IEnumerable<JsonElement> vouchers, string label)
+    {
+        var codes = vouchers.Select(v => Read(v, "VoucherCode", "voucherCode"))
+            .Where(code => code != "—" && !string.IsNullOrWhiteSpace(code))
+            .ToArray();
+        if (codes.Length == 0)
+        {
+            Snackbar.Add("There are no active unused voucher codes to copy.", Severity.Info);
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("lmsVouchers.copyText", string.Join(Environment.NewLine, codes));
+            Snackbar.Add($"Copied {codes.Length} {label.ToLowerInvariant()} code(s).", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Could not copy voucher codes: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task PrintCodes(IEnumerable<JsonElement> vouchers)
+    {
+        var slips = vouchers.Where(CanDistribute).Select(v => new
+        {
+            code = Read(v, "VoucherCode", "voucherCode"),
+            expiresAt = FormatDate(Read(v, "ExpiresAt", "expiresAt"))
+        }).ToArray();
+        if (slips.Length == 0)
+        {
+            Snackbar.Add("There are no active unused voucher codes to print.", Severity.Info);
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("lmsVouchers.printSlips", slips);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Could not open the voucher print view: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DownloadAvailable()
+    {
+        var rows = DistributableVouchers.Select(v => new
+        {
+            code = Read(v, "VoucherCode", "voucherCode"),
+            expiresAt = FormatDate(Read(v, "ExpiresAt", "expiresAt"))
+        }).ToArray();
+        if (rows.Length == 0) return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("lmsVouchers.downloadCsv", rows);
+            Snackbar.Add($"Downloaded {rows.Length} active voucher code(s).", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Could not download voucher codes: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private static string FormatDate(string value)
+    {
+        if (value is "—" or "" || !DateTime.TryParse(value, out var date)) return "No expiry";
+        return date.ToString("MMM d, yyyy");
+    }
+
+    private static string Read(JsonElement row, params string[] keys)
+    {
+        if (row.ValueKind != JsonValueKind.Object) return "—";
+        foreach (var property in row.EnumerateObject())
+            if (keys.Contains(property.Name, StringComparer.OrdinalIgnoreCase))
+                return property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? "—" : property.Value.ToString();
+        return "—";
     }
 }
