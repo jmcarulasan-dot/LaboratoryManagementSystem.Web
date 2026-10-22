@@ -32,15 +32,39 @@
             {
                 <MudForm @ref="_loginForm">
                     <MudStack Spacing="3">
-                        <MudTextField @bind-Value="_studentNo" Label="Student number" Variant="Variant.Outlined"
-                                      Required="true" RequiredError="Enter your student number." />
-                        <MudTextField @bind-Value="_password" Label="Password" InputType="InputType.Password"
-                                      Variant="Variant.Outlined" Required="true" RequiredError="Enter your password." />
+                        @if (_registering)
+                        {
+                            <MudTextField @bind-Value="_fullName" Label="Full name" Variant="Variant.Outlined" Required="true" RequiredError="Enter your first and last name." />
+                        }
+                        <MudTextField @bind-Value="_studentNo" Label="Student number" Variant="Variant.Outlined" Required="true" RequiredError="Enter your student number." />
+                        @if (_registering)
+                        {
+                            <MudTextField @bind-Value="_email" Label="Gmail address" Variant="Variant.Outlined" Required="true" RequiredError="Enter your Gmail address." />
+                            <MudGrid Spacing="2">
+                                <MudItem xs="6">
+                                    <MudSelect T="string" @bind-Value="_course" Label="Course" Variant="Variant.Outlined">
+                                        @foreach (var course in Courses) { <MudSelectItem Value="@course">@course</MudSelectItem> }
+                                    </MudSelect>
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudSelect T="string" @bind-Value="_year" Label="Year level" Variant="Variant.Outlined">
+                                        @foreach (var year in Years) { <MudSelectItem Value="@year">@year</MudSelectItem> }
+                                    </MudSelect>
+                                </MudItem>
+                            </MudGrid>
+                            <MudTextField @bind-Value="_section" Label="Section" Variant="Variant.Outlined" Required="true" RequiredError="Enter your section." />
+                        }
+                        <MudTextField @bind-Value="_password" Label="Password" InputType="InputType.Password" Variant="Variant.Outlined" Required="true" RequiredError="Enter your password." />
+                        @if (_registering)
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">An administrator must approve your registration before you can sign in. You will set up your authenticator QR code after approval.</MudAlert>
+                        }
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
-                                   Disabled="_busy" OnClick="LoginAsync">
+                                   Disabled="_busy" OnClick="SubmitStudentFormAsync">
                             @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
-                            Sign in
+                            @(_registering ? "Submit registration" : "Sign in")
                         </MudButton>
+                        <MudButton Variant="Variant.Text" FullWidth="true" Disabled="_busy" OnClick="ToggleRegistration">@(_registering ? "Back to sign in" : "New student? Register for approval")</MudButton>
                     </MudStack>
                 </MudForm>
             }
@@ -118,6 +142,11 @@
     private const string StudentTokenKey = "lms_student_token";
     private MudForm? _loginForm;
     private string _studentNo = string.Empty;
+    private string _fullName = string.Empty;
+    private string _email = string.Empty;
+    private string _course = "BSIT";
+    private string _year = "1st Year";
+    private string _section = string.Empty;
     private string _password = string.Empty;
     private string _voucherCode = string.Empty;
     private string _studentDisplay = "Student";
@@ -127,6 +156,9 @@
     private string? _authenticatorQrCode;
     private string _verificationCode = string.Empty;
     private bool _requiresEnrollment;
+    private bool _registering;
+    private static readonly string[] Courses = ["BSIT", "BSA", "BSBA", "BSHM", "BSCS"];
+    private static readonly string[] Years = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
     private Severity _messageSeverity = Severity.Info;
     private bool _signedIn;
     private bool _busy;
@@ -203,6 +235,64 @@
             _busy = false;
         }
     }
+
+    private void ToggleRegistration()
+    {
+        _registering = !_registering;
+        _message = string.Empty;
+        _password = string.Empty;
+    }
+
+    private Task SubmitStudentFormAsync() => _registering ? RegisterStudentAsync() : LoginAsync();
+
+    private async Task RegisterStudentAsync()
+    {
+        if (!HasTwoNameParts(_fullName))
+        {
+            SetMessage("Enter your first and last name.", Severity.Warning);
+            return;
+        }
+        if (!System.Text.RegularExpressions.Regex.IsMatch(_email.Trim(), @"^[A-Z0-9._%+-]+@gmail\.com$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+        {
+            SetMessage("Enter a valid Gmail address ending in @gmail.com.", Severity.Warning);
+            return;
+        }
+        if (_password.Length < 8 || !_password.Any(char.IsUpper) || !_password.Any(char.IsLower))
+        {
+            SetMessage("Use a password with at least 8 characters, including uppercase and lowercase letters.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        _message = string.Empty;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/login/student/register", new
+            {
+                studentNo = _studentNo.Trim(),
+                fullName = _fullName.Trim(),
+                courseSection = $"{_course} - {_year} - {_section.Trim()}",
+                email = _email.Trim(),
+                password = _password
+            });
+            if (!response.IsSuccessStatusCode)
+            {
+                SetMessage($"Registration failed: {CleanErrorDetail(await response.Content.ReadAsStringAsync())}", Severity.Error);
+                return;
+            }
+
+            _password = string.Empty;
+            _registering = false;
+            SetMessage("Registration submitted. An administrator must approve it before you can sign in.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not contact the LMS API: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private static bool HasTwoNameParts(string name) => name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2;
 
     private async Task VerifyMfaAsync()
     {

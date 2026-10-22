@@ -18,14 +18,37 @@
     {
         <MudAlert Severity="Severity.Warning" Class="mb-4">@_error</MudAlert>
     }
-    @if (!string.IsNullOrWhiteSpace(_twoFactorUri))
-    {
-        <MudAlert Severity="Severity.Info" Class="mb-4">
-            Student account created. Save this authenticator setup link for the student:<br />
-            <span class="setup-uri">@_twoFactorUri</span>
-        </MudAlert>
-    }
-
+    <MudPaper Elevation="0" Class="content-card pa-4 mb-5">
+        <div class="management-section-heading">
+            <div>
+                <MudText Typo="Typo.h6">Pending registrations</MudText>
+                <MudText Typo="Typo.body2" Class="muted">Review student-submitted accounts before they can sign in.</MudText>
+            </div>
+            <MudChip T="string" Color="Color.Warning" Variant="Variant.Outlined">@_pendingRows.Count waiting</MudChip>
+        </div>
+        @if (_pendingRows.Count == 0)
+        {
+            <MudText Class="muted pa-3">There are no student registrations waiting for approval.</MudText>
+        }
+        else
+        {
+            <MudTable Items="_pendingRows" Dense="true" Hover="true" Elevation="0">
+                <HeaderContent><MudTh>Student number</MudTh><MudTh>Full name</MudTh><MudTh>Course / section</MudTh><MudTh>Email</MudTh><MudTh>Review</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@Read(context, "studentNo", "StudentNo")</MudTd>
+                    <MudTd>@Read(context, "fullName", "FullName")</MudTd>
+                    <MudTd>@Read(context, "courseSection", "CourseSection")</MudTd>
+                    <MudTd>@Read(context, "email", "Email")</MudTd>
+                    <MudTd>
+                        <MudStack Row="true" Spacing="1">
+                            <MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" OnClick="@(() => ReviewRegistration(context, true))">Approve</MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" OnClick="@(() => ReviewRegistration(context, false))">Reject</MudButton>
+                        </MudStack>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
     @if (_formOpen)
     {
         <MudPaper Class="content-card pa-5 mb-5" Elevation="0">
@@ -101,10 +124,11 @@
                     <MudTd>@Read(context, "fullName", "FullName")</MudTd>
                     <MudTd>@Read(context, "courseSection", "CourseSection")</MudTd>
                     <MudTd>@Read(context, "email", "Email")</MudTd>
-                    <MudTd><span class="status-pill @(IsSuspended(context) ? "maintenance" : "available")">@(IsSuspended(context) ? "Suspended" : "Active")</span></MudTd>
+                    <MudTd><span class="status-pill @(IsPendingApproval(context) ? "maintenance" : IsSuspended(context) ? "maintenance" : "available")">@(IsPendingApproval(context) ? "Pending approval" : IsSuspended(context) ? "Suspended" : "Active")</span></MudTd>
                     <MudTd>
                         <MudStack Row="true" Spacing="1">
                             <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => EditStudent(context))">Edit</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ResetAuthenticator(context))">Reset MFA</MudButton>
                             @if (IsSuspended(context))
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success" OnClick="@(() => SetSuspension(context, false))">Unsuspend</MudButton>
@@ -129,8 +153,8 @@
     private bool _formOpen;
     private bool _editing;
     private string? _error;
-    private string? _twoFactorUri;
     private List<JsonElement> _rows = new();
+    private List<JsonElement> _pendingRows = new();
     private IEnumerable<JsonElement> FilteredRows => string.IsNullOrWhiteSpace(_search) ? _rows : _rows.Where(r => r.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase));
     private string _originalStudentNo = "";
     private string _studentNo = "";
@@ -153,9 +177,11 @@
         try
         {
             var result = await Api.GetAsync<JsonElement>("api/admin/students");
+            var pending = await Api.GetAsync<JsonElement>("api/admin/students/pending");
             if (result.ValueKind != JsonValueKind.Array)
                 _error = "Could not load students. Sign in as an admin and check the API/database.";
             else _rows = result.EnumerateArray().ToList();
+            _pendingRows = pending.ValueKind == JsonValueKind.Array ? pending.EnumerateArray().ToList() : new();
         }
         catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
         finally { _loading = false; }
@@ -226,14 +252,7 @@
 
             if (!_editing)
             {
-                try
-                {
-                    using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-                    if (json.RootElement.TryGetProperty("twoFactorSetupUri", out var uri))
-                        _twoFactorUri = uri.GetString();
-                }
-                catch { }
-                Snackbar.Add("Student account created.", Severity.Success);
+                Snackbar.Add("Student account created. Their first sign-in will show the authenticator QR code.", Severity.Success);
             }
             else Snackbar.Add("Student profile updated.", Severity.Success);
 
@@ -267,6 +286,46 @@
             }
         }
         catch (Exception ex) { Snackbar.Add("Delete failed: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task ReviewRegistration(JsonElement row, bool approve)
+    {
+        var studentNo = Read(row, "studentNo", "StudentNo");
+        if (string.IsNullOrWhiteSpace(studentNo) || studentNo == "—") return;
+        if (!approve && !await JS.InvokeAsync<bool>("confirm", $"Reject and remove registration for {studentNo}?")) return;
+
+        try
+        {
+            var path = approve
+                ? $"api/admin/students/{Uri.EscapeDataString(studentNo)}/approve"
+                : $"api/admin/students/{Uri.EscapeDataString(studentNo)}/registration";
+            using var response = await Api.SendAsync(approve ? HttpMethod.Put : HttpMethod.Delete, path);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(approve ? "Registration approved. The student can sign in and scan their MFA QR code." : "Registration rejected and removed.", Severity.Success);
+                await LoadStudents();
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                Snackbar.Add(string.IsNullOrWhiteSpace(detail) ? "Registration review failed." : detail.Trim('"'), Severity.Error);
+            }
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not review registration: {ex.Message}", Severity.Error); }
+    }
+
+    private async Task ResetAuthenticator(JsonElement row)
+    {
+        var studentNo = Read(row, "studentNo", "StudentNo");
+        if (string.IsNullOrWhiteSpace(studentNo) || studentNo == "—") return;
+        if (!await JS.InvokeAsync<bool>("confirm", $"Reset the authenticator for {studentNo}? They will need to scan a new QR code at next sign-in.")) return;
+
+        try
+        {
+            var ok = await Api.SendSuccessAsync(HttpMethod.Put, $"api/admin/students/{Uri.EscapeDataString(studentNo)}/security/totp/reset");
+            Snackbar.Add(ok ? "Authenticator reset. The student will receive a new QR code at next sign-in." : "Authenticator reset failed.", ok ? Severity.Success : Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not reset authenticator: {ex.Message}", Severity.Error); }
     }
 
     private void LoadCourseSection(string value)
@@ -315,6 +374,9 @@
 
     private static bool IsSuspended(JsonElement row) => row.ValueKind == JsonValueKind.Object &&
         row.EnumerateObject().Any(p => (p.Name.Equals("isSuspended", StringComparison.OrdinalIgnoreCase) || p.Name.Equals("suspended", StringComparison.OrdinalIgnoreCase)) && p.Value.ValueKind == JsonValueKind.True);
+
+    private static bool IsPendingApproval(JsonElement row) => row.ValueKind == JsonValueKind.Object &&
+        row.EnumerateObject().Any(p => p.Name.Equals("isPendingApproval", StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.True);
 
     private static string Read(JsonElement row, params string[] names)
     {
