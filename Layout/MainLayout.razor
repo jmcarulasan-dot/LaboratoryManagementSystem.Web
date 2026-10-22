@@ -4,28 +4,28 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudLayout>
-    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="264px" Class="figma-sidebar">
+    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="250px" Class="figma-sidebar">
         <div class="figma-brand">
-            <div class="figma-brand-mark"><MudIcon Icon="@Icons.Material.Filled.Computer" Size="Size.Medium" /></div>
+            <img class="figma-brand-logo" src="aclc-logo.png" alt="ACLC College of Mandaue" />
             <div>
-                <div class="figma-brand-title">ACLC College</div>
-                <div class="figma-brand-subtitle">Laboratory Management</div>
+                <div class="figma-brand-title">Software Lab</div>
+                <div class="figma-brand-subtitle">Admin Portal</div>
             </div>
         </div>
         <MudText Class="nav-section-title">WORKSPACE</MudText>
         <MudNavMenu Class="figma-nav">
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Overview</MudNavLink>
-            <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.PeopleAlt">Students</MudNavLink>
-            <MudNavLink Href="/staff" Icon="@Icons.Material.Outlined.Badge">Staff accounts</MudNavLink>
-            <MudNavLink Href="/rooms-pcs" Icon="@Icons.Material.Outlined.Computer">Rooms &amp; PCs</MudNavLink>
-            <MudNavLink Href="/sessions" Icon="@Icons.Material.Outlined.Schedule">Lab sessions</MudNavLink>
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.PeopleAlt">User Management</MudNavLink>
+            <MudNavLink Href="/staff" Icon="@Icons.Material.Outlined.Badge">Staff Accounts</MudNavLink>
+            <MudNavLink Href="/rooms-pcs" Icon="@Icons.Material.Outlined.Computer">Computer Management</MudNavLink>
+            <MudNavLink Href="/sessions" Icon="@Icons.Material.Outlined.Schedule">Lab Sessions</MudNavLink>
             <MudNavLink Href="/vouchers" Icon="@Icons.Material.Outlined.ConfirmationNumber">Vouchers</MudNavLink>
-            <MudNavLink Href="/logs" Icon="@Icons.Material.Outlined.ReceiptLong">Audit logs</MudNavLink>
+            <MudNavLink Href="/logs" Icon="@Icons.Material.Outlined.ReceiptLong">Log Management</MudNavLink>
             <MudNavLink Href="/reports" Icon="@Icons.Material.Outlined.BarChart">Reports</MudNavLink>
             <MudNavLink Href="/notifications" Icon="@Icons.Material.Outlined.Notifications">Notifications</MudNavLink>
             <MudNavLink Href="/settings" Icon="@Icons.Material.Outlined.Settings">Settings</MudNavLink>
         </MudNavMenu>
-        <div class="figma-sidebar-footer">ACLC College of Mandaue <span>·</span> Admin workspace</div>
+        <div class="figma-sidebar-footer">© 2026 ACLC College of Mandaue</div>
     </MudDrawer>
     <MudMainContent Class="figma-main">
         <div class="figma-topbar">
@@ -33,7 +33,13 @@
             <MudSpacer />
             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="admin-role-chip">ADMINISTRATOR</MudChip>
             <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Class="topbar-icon" aria-label="Notifications" />
-            <MudAvatar Class="figma-profile-avatar" Image="@_profilePhotoUrl">@GetInitials()</MudAvatar>
+            <MudAvatar Class="figma-profile-avatar">
+                @if (!string.IsNullOrWhiteSpace(_profilePhotoUrl))
+                {
+                    <MudImage Src="@_profilePhotoUrl" Alt="Admin profile photo" />
+                }
+                else { @GetInitials() }
+            </MudAvatar>
             <div class="figma-profile"><b>@_adminName</b><span>@_adminCompanyId</span></div>
             <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
         </div>
