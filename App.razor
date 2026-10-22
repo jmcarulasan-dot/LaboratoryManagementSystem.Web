@@ -1,6 +1,7 @@
 <Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
-        @if (routeData.PageType == typeof(LaboratoryManagementSystem.Web.Pages.AdminLogin))
+        @if (routeData.PageType == typeof(LaboratoryManagementSystem.Web.Pages.AdminLogin) ||
+            routeData.PageType == typeof(LaboratoryManagementSystem.Web.Pages.StudentAccess))
         {
             <RouteView RouteData="@routeData" DefaultLayout="@typeof(LoginLayout)" />
         }
