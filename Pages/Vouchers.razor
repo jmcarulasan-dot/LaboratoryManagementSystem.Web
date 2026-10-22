@@ -22,14 +22,18 @@
     {
         <MudPaper Class="content-card voucher-generated pa-5 mb-4" Elevation="0">
             <MudText Typo="Typo.h6" Class="mb-1">New voucher codes</MudText>
-            <MudText Class="muted mb-3">Copy and distribute these codes securely. They are also saved in the voucher list below.</MudText>
+            <MudText Class="muted mb-3">These codes are not sent automatically. Give one code to each student for use at a lab PC.</MudText>
             <div class="voucher-code-grid">
                 @foreach (var voucher in _generated)
                 {
                     <div class="voucher-code">@Read(voucher, "voucherCode", "VoucherCode")</div>
                 }
             </div>
-            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-3" OnClick="@(() => _generated.Clear())">Hide codes</MudButton>
+            <MudStack Row="true" Spacing="1" Class="mt-3 voucher-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ContentCopy" OnClick="CopyGeneratedBatch">Copy batch</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Print" OnClick="@(() => PrintCodes(_generated))">Print slips</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => _generated.Clear())">Hide codes</MudButton>
+            </MudStack>
         </MudPaper>
     }
     @if (_formOpen)
@@ -50,9 +54,20 @@
 
     <MudPaper Elevation="0" Class="content-card pa-4">
         <div class="management-section-heading">
-            <div><MudText Typo="Typo.h6">Voucher records</MudText><MudText Class="muted" Typo="Typo.body2">@_rows.Count record(s)</MudText></div>
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="LoadVouchers">Refresh</MudButton>
+            <div>
+                <MudText Typo="Typo.h6">Voucher records</MudText>
+                <MudText Class="muted" Typo="Typo.body2">@_rows.Count record(s) · @DistributableVouchers.Count ready to distribute</MudText>
+            </div>
+            <MudStack Row="true" Spacing="1" Class="voucher-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ContentCopy" Disabled="@(!DistributableVouchers.Any())" OnClick="CopyAvailable">Copy active codes</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Print" Disabled="@(!DistributableVouchers.Any())" OnClick="@(() => PrintCodes(DistributableVouchers))">Print slips</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Download" Disabled="@(!DistributableVouchers.Any())" OnClick="DownloadAvailable">Download CSV</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Refresh" OnClick="LoadVouchers">Refresh</MudButton>
+            </MudStack>
         </div>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Give one active code to one student. They enter it on the lab PC lock screen; each code works once.
+        </MudAlert>
         @if (_loading)
         {
             <MudProgressLinear Indeterminate="true" Color="Color.Error" />
@@ -77,14 +92,20 @@
                     <MudTd>@Read(context, "ExpiresAt", "expiresAt")</MudTd>
                     <MudTd>@Read(context, "UsedAt", "usedAt")</MudTd>
                     <MudTd>
+                        <MudStack Row="true" Spacing="0" Class="voucher-row-actions">
+                        @if (CanDistribute(context))
+                        {
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.ContentCopy" Color="Color.Primary" aria-label="Copy voucher code" OnClick="@(() => CopyCode(context))" />
+                        }
                         @if (CanCancel(context))
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => CancelVoucher(context))">Cancel voucher</MudButton>
                         }
-                        else
+                        @if (!CanCancel(context) && !CanDistribute(context))
                         {
                             <MudText Typo="Typo.caption" Class="muted">—</MudText>
                         }
+                        </MudStack>
                     </MudTd>
                 </RowTemplate>
             </MudTable>
@@ -93,9 +114,9 @@
 </div>
 
 @code {
-    private readonly string[] _columns = ["VoucherCode", "StudentNo", "StudentName", "Status", "CreatedAt", "ExpiresAt", "UsedAt"];
     private IReadOnlyCollection<JsonElement> _rows = Array.Empty<JsonElement>();
     private List<JsonElement> _generated = new();
+    private IReadOnlyList<JsonElement> DistributableVouchers => _rows.Where(CanDistribute).ToArray();
     private bool _loading = true;
     private bool _saving;
     private bool _formOpen;
@@ -144,9 +165,12 @@
     }
 
     private static bool CanCancel(JsonElement row) =>
+        CanDistribute(row);
+
+    private static bool CanDistribute(JsonElement row) =>
         Read(row, "Status", "status").Equals("Active", StringComparison.OrdinalIgnoreCase) &&
-        Read(row, "StudentID", "studentID") is "—" or "" &&
-        Read(row, "UsedAt", "usedAt") is "—" or "";
+        (Read(row, "StudentID", "studentID") is "—" or "" or "0") &&
+        (Read(row, "UsedAt", "usedAt") is "—" or "");
 
     private static bool IsCancelled(JsonElement row) =>
         Read(row, "Status", "status").Equals("Cancelled", StringComparison.OrdinalIgnoreCase);
@@ -183,6 +207,87 @@
         }
         catch (Exception ex) { Snackbar.Add($"Voucher generation failed: {ex.Message}", Severity.Error); }
         finally { _saving = false; }
+    }
+
+    private Task CopyGeneratedBatch() => CopyCodes(_generated, "New batch");
+
+    private Task CopyAvailable() => CopyCodes(DistributableVouchers, "Active vouchers");
+
+    private async Task CopyCode(JsonElement voucher)
+    {
+        if (!CanDistribute(voucher)) return;
+        await CopyCodes(new[] { voucher }, "Voucher");
+    }
+
+    private async Task CopyCodes(IEnumerable<JsonElement> vouchers, string label)
+    {
+        var codes = vouchers.Select(v => Read(v, "VoucherCode", "voucherCode"))
+            .Where(code => code != "—" && !string.IsNullOrWhiteSpace(code))
+            .ToArray();
+        if (codes.Length == 0)
+        {
+            Snackbar.Add("There are no active unused voucher codes to copy.", Severity.Info);
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("lmsVouchers.copyText", string.Join(Environment.NewLine, codes));
+            Snackbar.Add($"Copied {codes.Length} {label.ToLowerInvariant()} code(s).", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Could not copy voucher codes: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task PrintCodes(IEnumerable<JsonElement> vouchers)
+    {
+        var slips = vouchers.Where(CanDistribute).Select(v => new
+        {
+            code = Read(v, "VoucherCode", "voucherCode"),
+            expiresAt = FormatDate(Read(v, "ExpiresAt", "expiresAt"))
+        }).ToArray();
+        if (slips.Length == 0)
+        {
+            Snackbar.Add("There are no active unused voucher codes to print.", Severity.Info);
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("lmsVouchers.printSlips", slips);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Could not open the voucher print view: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DownloadAvailable()
+    {
+        var rows = DistributableVouchers.Select(v => new
+        {
+            code = Read(v, "VoucherCode", "voucherCode"),
+            expiresAt = FormatDate(Read(v, "ExpiresAt", "expiresAt"))
+        }).ToArray();
+        if (rows.Length == 0) return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("lmsVouchers.downloadCsv", rows);
+            Snackbar.Add($"Downloaded {rows.Length} active voucher code(s).", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Could not download voucher codes: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private static string FormatDate(string value)
+    {
+        if (value is "—" or "" || !DateTime.TryParse(value, out var date)) return "No expiry";
+        return date.ToString("MMM d, yyyy");
     }
 
     private static string Read(JsonElement row, params string[] keys)

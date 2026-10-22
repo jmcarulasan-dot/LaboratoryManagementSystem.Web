@@ -233,10 +233,13 @@ html, body, #app { background: var(--lms-page); color: var(--lms-ink); }
 .voucher-generated { border-color:#cde7d8 !important; background:linear-gradient(120deg,#fff 0%,#f5fbf7 100%) !important; }
 .voucher-code-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:9px; }
 .voucher-code { padding:11px 12px; border:1px dashed #a8cbb5; border-radius:9px; background:#fff; color:#244b3d; font-family:ui-monospace,Consolas,monospace; font-size:13px; font-weight:700; letter-spacing:.04em; text-align:center; }
+.voucher-actions { flex-wrap:wrap; justify-content:flex-end; }
+.voucher-row-actions { align-items:center; }
 @media(max-width:700px) {
   .management-heading { align-items:flex-start; flex-direction:column; }
   .management-heading > .mud-stack-row { flex-wrap:wrap; }
   .management-section-heading { align-items:flex-start; flex-direction:column; }
+  .voucher-actions { justify-content:flex-start; }
 }
 
 /* Figma-aligned ACLC visual system */
