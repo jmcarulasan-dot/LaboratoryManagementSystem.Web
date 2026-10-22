@@ -28,14 +28,14 @@ public sealed class ApiClient
         if (!response.IsSuccessStatusCode)
         {
             await LogoutAsync();
-            return new AdminLoginChallenge(false, null, null, false, null, await ReadErrorAsync(response));
+            return new AdminLoginChallenge(false, null, null, false, null, null, await ReadErrorAsync(response));
         }
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         var root = json.RootElement;
         var challengeToken = ReadString(root, "challengeToken");
         if (string.IsNullOrWhiteSpace(challengeToken))
-            return new AdminLoginChallenge(false, null, null, false, null, "The API did not return an MFA challenge.");
+            return new AdminLoginChallenge(false, null, null, false, null, null, "The API did not return an MFA challenge.");
 
         return new AdminLoginChallenge(
             true,
@@ -43,6 +43,7 @@ public sealed class ApiClient
             challengeToken,
             ReadBoolean(root, "requiresEnrollment"),
             ReadString(root, "authenticatorSetupUri"),
+            ReadString(root, "authenticatorQrCode"),
             null);
     }
 
@@ -159,4 +160,5 @@ public sealed record AdminLoginChallenge(
     string? ChallengeToken,
     bool RequiresEnrollment,
     string? AuthenticatorSetupUri,
+    string? AuthenticatorQrCode,
     string? Error);

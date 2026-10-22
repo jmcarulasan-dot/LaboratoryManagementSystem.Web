@@ -50,9 +50,19 @@
                     @if (_requiresEnrollment)
                     {
                         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                            Add this account in Google Authenticator or Microsoft Authenticator using the setup key below. Choose “Enter a setup key,” enter your student number as the account name, then type the current six-digit code here.
+                            Open Google Authenticator or Microsoft Authenticator, tap the plus button, and scan this QR code. Then enter the current six-digit code below.
                         </MudAlert>
-                        <MudTextField Value="@SetupKey" Label="Authenticator setup key" Variant="Variant.Outlined" ReadOnly="true" />
+                        @if (!string.IsNullOrWhiteSpace(_authenticatorQrCode))
+                        {
+                            <div class="mfa-qr-panel">
+                                <MudImage Src="@_authenticatorQrCode" Alt="Authenticator enrollment QR code" Class="mfa-qr-image" />
+                                <MudText Typo="Typo.caption" Class="muted">Scan with your authenticator app</MudText>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">The API did not provide an enrollment QR code. Update and restart the API, then start sign-in again.</MudAlert>
+                        }
                     }
                     else
                     {
@@ -114,6 +124,7 @@
     private string _message = string.Empty;
     private string? _challengeToken;
     private string? _authenticatorSetupUri;
+    private string? _authenticatorQrCode;
     private string _verificationCode = string.Empty;
     private bool _requiresEnrollment;
     private Severity _messageSeverity = Severity.Info;
@@ -126,17 +137,6 @@
         !string.IsNullOrWhiteSpace(_voucherCode) &&
         _pcs.Any(p => p.PCID == _selectedPcId &&
             string.Equals(p.PCStatus, "Available", StringComparison.OrdinalIgnoreCase));
-
-    private string SetupKey
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(_authenticatorSetupUri)) return "Setup key unavailable. Restart sign-in and try again.";
-            var query = _authenticatorSetupUri.Split('?', 2).ElementAtOrDefault(1);
-            var secret = query?.Split('&').FirstOrDefault(part => part.StartsWith("secret=", StringComparison.OrdinalIgnoreCase));
-            return secret is null ? "Setup key unavailable. Restart sign-in and try again." : Uri.UnescapeDataString(secret[(secret.IndexOf('=') + 1)..]);
-        }
-    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -187,6 +187,7 @@
             _challengeToken = challenge.GetString();
             _requiresEnrollment = root.TryGetProperty("requiresEnrollment", out var enrollment) && enrollment.ValueKind == JsonValueKind.True;
             _authenticatorSetupUri = root.TryGetProperty("authenticatorSetupUri", out var setup) && setup.ValueKind == JsonValueKind.String ? setup.GetString() : null;
+            _authenticatorQrCode = root.TryGetProperty("authenticatorQrCode", out var qr) && qr.ValueKind == JsonValueKind.String ? qr.GetString() : null;
             _password = string.Empty;
             _verificationCode = string.Empty;
             SetMessage(_requiresEnrollment
@@ -235,6 +236,7 @@
             _signedIn = true;
             _challengeToken = null;
             _authenticatorSetupUri = null;
+            _authenticatorQrCode = null;
             _verificationCode = string.Empty;
             await RefreshPCsAsync();
             SetMessage("Sign-in successful. Choose an available computer and enter your voucher.", Severity.Success);
@@ -250,6 +252,7 @@
     {
         _challengeToken = null;
         _authenticatorSetupUri = null;
+        _authenticatorQrCode = null;
         _verificationCode = string.Empty;
         _requiresEnrollment = false;
         _message = string.Empty;
@@ -337,6 +340,7 @@
         _voucherCode = string.Empty;
         _challengeToken = null;
         _authenticatorSetupUri = null;
+        _authenticatorQrCode = null;
         _verificationCode = string.Empty;
         _requiresEnrollment = false;
         SetMessage("You have signed out.", Severity.Info);

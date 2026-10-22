@@ -40,9 +40,19 @@
                     @if (_requiresEnrollment)
                     {
                         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                            Add this account in Google Authenticator or Microsoft Authenticator using the setup key below. Choose “Enter a setup key,” enter your Company ID as the account name, then type the current six-digit code here.
+                            Open Google Authenticator or Microsoft Authenticator, tap the plus button, and scan this QR code. Then enter the current six-digit code below.
                         </MudAlert>
-                        <MudTextField Value="@SetupKey" Label="Authenticator setup key" Variant="Variant.Outlined" ReadOnly="true" />
+                        @if (!string.IsNullOrWhiteSpace(_authenticatorQrCode))
+                        {
+                            <div class="mfa-qr-panel">
+                                <MudImage Src="@_authenticatorQrCode" Alt="Authenticator enrollment QR code" Class="mfa-qr-image" />
+                                <MudText Typo="Typo.caption" Class="muted">Scan with your authenticator app</MudText>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">The API did not provide an enrollment QR code. Update and restart the API, then start sign-in again.</MudAlert>
+                        }
                     }
                     else
                     {
@@ -71,19 +81,9 @@
     private bool _busy;
     private string? _challengeToken;
     private string? _authenticatorSetupUri;
+    private string? _authenticatorQrCode;
     private string _verificationCode = string.Empty;
     private bool _requiresEnrollment;
-
-    private string SetupKey
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(_authenticatorSetupUri)) return "Setup key unavailable. Restart sign-in and try again.";
-            var query = _authenticatorSetupUri.Split('?', 2).ElementAtOrDefault(1);
-            var secret = query?.Split('&').FirstOrDefault(part => part.StartsWith("secret=", StringComparison.OrdinalIgnoreCase));
-            return secret is null ? "Setup key unavailable. Restart sign-in and try again." : Uri.UnescapeDataString(secret[(secret.IndexOf('=') + 1)..]);
-        }
-    }
 
     private async Task SignIn()
     {
@@ -102,6 +102,7 @@
             _challengeToken = challenge.ChallengeToken;
             _requiresEnrollment = challenge.RequiresEnrollment;
             _authenticatorSetupUri = challenge.AuthenticatorSetupUri;
+            _authenticatorQrCode = challenge.AuthenticatorQrCode;
             _password = string.Empty;
             _verificationCode = string.Empty;
         }
@@ -140,6 +141,7 @@
     {
         _challengeToken = null;
         _authenticatorSetupUri = null;
+        _authenticatorQrCode = null;
         _verificationCode = string.Empty;
         _requiresEnrollment = false;
     }
