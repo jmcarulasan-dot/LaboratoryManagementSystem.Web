@@ -1,10 +1,217 @@
 @page "/vouchers"
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@inject IJSRuntime Js
+
 <div class="page-wrap">
- <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6"><div><MudText Typo="Typo.h4" Class="page-title">Vouchers</MudText><MudText Class="muted mt-1">Generate batches of one-time laboratory access vouchers.</MudText></div><MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="ShowDemoMessage">Generate vouchers</MudButton></MudStack>
- <MudPaper Elevation="0" Class="content-card pa-4"><MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-4"><MudTextField @bind-Value="_search" Placeholder="Search records..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:340px"/><MudSpacer/><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileDownload">Export</MudButton></MudStack>
- <MudTable Items="FilteredRows" Hover Dense Elevation="0"><HeaderContent>@foreach(var col in Columns){<MudTh>@col</MudTh>}</HeaderContent><RowTemplate>@foreach(var value in context){<MudTd>@if(value=="Available"||value=="Active"||value=="Read"||value=="Completed"){<MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@value</MudChip>}else if(value=="Suspended"||value=="Under Maintenance"||value=="Unread"){<MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@value</MudChip>}else if(value=="In Use"){<MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@value</MudChip>}else{@value} </MudTd>}</RowTemplate></MudTable></MudPaper>
- <MudText Typo="Typo.caption" Class="muted mt-4">Design preview only — sample records. API/database actions are not connected yet.</MudText>
+    <PageHeader Title="Vouchers" Subtitle="Create one-time lab access codes, then give each code to its student.">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => _showGenerate = !_showGenerate)">Generate voucher batch</MudButton>
+    </PageHeader>
+
+    @if (_showGenerate)
+    {
+        <div class="lms-card" style="margin-bottom:18px">
+            <h2 class="lms-card-title" style="margin-bottom:12px">Generate voucher batch</h2>
+            <div class="form-grid" style="max-width:520px">
+                <MudNumericField T="int" @bind-Value="_quantity" Label="Quantity (1–500)" Min="1" Max="500" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudDatePicker @bind-Date="_expiry" Label="Expires on (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" MinDate="DateTime.Today.AddDays(1)" Clearable="true" />
+            </div>
+            <div class="form-actions" style="justify-content:flex-start">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="Generate">Generate</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="@(() => _showGenerate = false)">Cancel</MudButton>
+            </div>
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">@_error</MudAlert>
+    }
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Error" />
+    }
+    else if (_error is null)
+    {
+        <div class="stat-grid">
+            <div class="stat-tile"><div class="stat-icon"><MudIcon Icon="@Icons.Material.Outlined.ConfirmationNumber" Size="Size.Small" /></div><div class="stat-value">@_rows.Count</div><div class="stat-label">Total vouchers · across all batches</div></div>
+            <div class="stat-tile"><div class="stat-icon"><MudIcon Icon="@Icons.Material.Outlined.CallMade" Size="Size.Small" /></div><div class="stat-value">@Ready.Count</div><div class="stat-label">Ready to distribute · active and unused</div></div>
+            <div class="stat-tile"><div class="stat-icon"><MudIcon Icon="@Icons.Material.Outlined.Check" Size="Size.Small" /></div><div class="stat-value">@_rows.Count(r => Status(r) == "Used")</div><div class="stat-label">Used · redeemed at a lab PC</div></div>
+        </div>
+
+        <div class="banner">
+            <MudIcon Icon="@Icons.Material.Outlined.Info" Style="color:#a16207" />
+            <div><b>How students receive a voucher</b><span>Copy a code for a student, or download the batch as a CSV to print handout slips. Each code unlocks one PC session once.</span></div>
+        </div>
+
+        <div class="lms-card">
+            <div class="lms-card-head">
+                <div>
+                    <h2 class="lms-card-title">Voucher records</h2>
+                    <div class="lms-card-sub">@_rows.Count codes · @Ready.Count ready to share</div>
+                </div>
+                <div class="row-actions">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" OnClick="CopyActive">Copy active codes</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" OnClick="Export">Download CSV</MudButton>
+                </div>
+            </div>
+            <div class="toolbar">
+                <MudTextField @bind-Value="_search" Immediate="true" Placeholder="Search codes or students" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" />
+            </div>
+            @if (Filtered.Count == 0)
+            {
+                <div class="empty">No vouchers yet. Use "Generate voucher batch" to create some.</div>
+            }
+            else
+            {
+                <div class="lms-table-wrap">
+                    <table class="lms-table">
+                        <thead><tr><th>Voucher Code</th><th>Student</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in Filtered)
+                            {
+                                var status = Status(row);
+                                <tr>
+                                    <td class="mono">@JsonRow.Str(row, "voucherCode")</td>
+                                    <td class="muted">@Owner(row)</td>
+                                    <td><span class="pill @Pill(status)">@status</span></td>
+                                    <td class="muted">@Expiry(row)</td>
+                                    <td>
+                                        @if (status == "Ready")
+                                        {
+                                            <div class="row-actions">
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" OnClick="@(() => Copy(row))">Copy</MudButton>
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => CancelVoucher(row))">Cancel</MudButton>
+                                            </div>
+                                        }
+                                        else if (status == "Used")
+                                        {
+                                            <span class="muted">Redeemed @JsonRow.When(JsonRow.Date(row, "usedAt"))</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">—</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            <div class="muted" style="font-size:12px;margin-top:14px">Voucher codes are shown in full so staff can copy or print them for handout.</div>
+        </div>
+    }
 </div>
-@code { private string _search=""; private string[] Columns=new[]{"Voucher Code", "Assigned Student", "Created", "Expires", "Status"}; private List<string[]> Rows=new(){new[] { "A7K2-X9PQ", "Not assigned", "Oct 09, 2026", "10:00 AM", "Available" },
-        new[] { "B4M8-P2RT", "Juan Dela Cruz", "Oct 09, 2026", "10:00 AM", "Used" },
-        new[] { "C5N7-W3KL", "Not assigned", "Oct 09, 2026", "11:00 AM", "Available" }}; private IEnumerable<string[]> FilteredRows=>string.IsNullOrWhiteSpace(_search)?Rows:Rows.Where(r=>string.Join(" ",r).Contains(_search,StringComparison.OrdinalIgnoreCase)); [Inject] private ISnackbar Snackbar{get;set;}=default!; private void ShowDemoMessage()=>Snackbar.Add("Voucher batch generation is a design placeholder. API generation is not connected yet.",Severity.Info); private void ShowExportMessage()=>Snackbar.Add("Export is not available in the design preview yet.",Severity.Info); }
+
+@code {
+    private bool _loading = true, _busy, _showGenerate;
+    private string? _error;
+    private string _search = "";
+    private int _quantity = 10;
+    private DateTime? _expiry;
+    private List<JsonElement> _rows = new();
+
+    private List<JsonElement> Ready => _rows.Where(r => Status(r) == "Ready").ToList();
+    private List<JsonElement> Filtered => string.IsNullOrWhiteSpace(_search)
+        ? _rows
+        : _rows.Where(r =>
+            JsonRow.Str(r, "voucherCode", "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            JsonRow.Str(r, "studentNo", "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            JsonRow.Str(r, "studentName", "").Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private static string Status(JsonElement row) => JsonRow.Str(row, "status", "") switch
+    {
+        "Active" => "Ready",
+        "Used" => "Used",
+        "Expired" => "Expired",
+        var other => other
+    };
+
+    private static string Owner(JsonElement row)
+    {
+        var studentNo = JsonRow.Str(row, "studentNo", "");
+        return studentNo.Length > 0 ? studentNo : "Not assigned";
+    }
+
+    private static string Expiry(JsonElement row)
+    {
+        var date = JsonRow.Date(row, "expiresAt");
+        return date.HasValue ? JsonRow.Day(date) : "No expiry";
+    }
+
+    private static string Pill(string status) => status switch { "Ready" => "pill-green", "Used" => "pill-gray", "Expired" => "pill-amber", _ => "pill-gray" };
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var rows = await Api.GetListAsync("api/admin/vouchers");
+            if (rows is null) _error = "Could not load vouchers. Sign in again and check that the API and database are running.";
+            else _rows = rows;
+        }
+        catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task Generate()
+    {
+        if (_quantity < 1 || _quantity > 500) { Snackbar.Add("Quantity must be between 1 and 500.", Severity.Warning); return; }
+        _busy = true;
+        try
+        {
+            var (ok, message) = await Api.SendForResultAsync(HttpMethod.Post, "api/admin/vouchers",
+                new { quantity = _quantity, expiresAt = _expiry?.Date.AddDays(1).AddSeconds(-1) });
+            Snackbar.Add(ok ? $"{_quantity} voucher(s) generated." : message, ok ? Severity.Success : Severity.Error);
+            if (ok) { _showGenerate = false; await Load(); }
+        }
+        catch (Exception ex) { Snackbar.Add($"API request failed: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelVoucher(JsonElement row)
+    {
+        var id = JsonRow.Int(row, "voucherID");
+        if (id <= 0) return;
+        try
+        {
+            var (ok, message) = await Api.SendForResultAsync(HttpMethod.Put, $"api/admin/vouchers/{id}/cancel");
+            Snackbar.Add(ok ? "Voucher cancelled." : message, ok ? Severity.Success : Severity.Error);
+            if (ok) await Load();
+        }
+        catch (Exception ex) { Snackbar.Add($"API request failed: {ex.Message}", Severity.Error); }
+    }
+
+    private async Task Copy(JsonElement row) => await CopyText(JsonRow.Str(row, "voucherCode", ""), "Voucher code copied.");
+
+    private async Task CopyActive()
+    {
+        var codes = Ready.Select(r => JsonRow.Str(r, "voucherCode", "")).Where(c => c.Length > 0).ToList();
+        if (codes.Count == 0) { Snackbar.Add("No active codes to copy.", Severity.Info); return; }
+        await CopyText(string.Join(Environment.NewLine, codes), $"{codes.Count} code(s) copied.");
+    }
+
+    private async Task CopyText(string text, string success)
+    {
+        if (text.Length == 0) return;
+        var ok = await Js.InvokeAsync<bool>("lmsCopy", text);
+        Snackbar.Add(ok ? success : "Copy is not available in this browser.", ok ? Severity.Success : Severity.Warning);
+    }
+
+    private async Task Export()
+    {
+        var csv = JsonRow.Csv(
+            new[] { "Voucher Code", "Student No", "Status", "Created", "Expires" },
+            _rows.Select(r => (IEnumerable<string>)new[]
+            {
+                JsonRow.Str(r, "voucherCode", ""), JsonRow.Str(r, "studentNo", ""), Status(r),
+                JsonRow.Day(JsonRow.Date(r, "createdAt")), JsonRow.Day(JsonRow.Date(r, "expiresAt"))
+            }));
+        await Js.InvokeVoidAsync("lmsDownload", $"vouchers-{DateTime.Today:yyyyMMdd}.csv", csv);
+    }
+}

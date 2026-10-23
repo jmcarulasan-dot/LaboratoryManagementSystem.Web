@@ -1,0 +1,96 @@
+@page "/students/add"
+@using System.Security.Cryptography
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@inject IJSRuntime Js
+
+<div class="page-wrap">
+    <a class="back-link" href="/students">← Back to User Management</a>
+    <PageHeader Title="Add New Student" Subtitle="Create a new student account" />
+
+    @if (_createdNo is not null)
+    {
+        <div class="result-box">
+            Student <b>@_createdNo</b> was created. Temporary password:
+            <code>@_createdPassword</code>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="CopyPassword">Copy</MudButton>
+            <div style="margin-top:8px;font-size:12.5px">Share it with the student now. It is not shown again, and the student sets up their authenticator at first sign-in.</div>
+        </div>
+    }
+
+    <div class="lms-card form-card">
+        <div class="form-grid">
+            <MudTextField @bind-Value="_fullName" Label="Full Name" Placeholder="e.g. Juan Dela Cruz" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_studentNo" Label="Student ID" Placeholder="C26-01-0000-MAN121" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_course" Label="Course / Section" Placeholder="e.g. BSIT 1A" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_email" Label="Email Address" Placeholder="@("student@email.com")" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <div class="full">
+                <MudTextField @bind-Value="_password" Label="Temporary Password" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Refresh" OnAdornmentClick="Regenerate" HelperText="Auto-generated. The student resets it on first login." />
+            </div>
+        </div>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">@_error</MudAlert>
+        }
+        <div class="form-actions">
+            <MudButton Href="/students" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="Save" StartIcon="@Icons.Material.Filled.Add">Add Student</MudButton>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _fullName = "", _studentNo = "", _course = "", _email = "";
+    private string _password = NewPassword();
+    private string? _error, _createdNo, _createdPassword;
+    private bool _busy;
+
+    private void Regenerate() => _password = NewPassword();
+
+    private async Task Save()
+    {
+        _error = null;
+        var name = _fullName.Trim();
+        if (name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < 2) { _error = "Enter the student's first and last name."; return; }
+        if (string.IsNullOrWhiteSpace(_studentNo)) { _error = "Student ID is required."; return; }
+        if (string.IsNullOrWhiteSpace(_course)) { _error = "Course / Section is required."; return; }
+        if (!_email.Contains('@') || _email.Trim().Length < 5) { _error = "Enter a valid email address."; return; }
+
+        _busy = true;
+        try
+        {
+            var password = _password;
+            var (ok, message) = await Api.SendForResultAsync(HttpMethod.Post, "api/admin/students",
+                new { studentNo = _studentNo.Trim(), fullName = name, courseSection = _course.Trim(), email = _email.Trim(), password });
+            if (!ok) { _error = message; return; }
+            _createdNo = _studentNo.Trim();
+            _createdPassword = password;
+            _fullName = _studentNo = _course = _email = "";
+            _password = NewPassword();
+            Snackbar.Add("Student account created.", Severity.Success);
+        }
+        catch (Exception ex) { _error = $"API request failed: {ex.Message}"; }
+        finally { _busy = false; }
+    }
+
+    private async Task CopyPassword()
+    {
+        var copied = await Js.InvokeAsync<bool>("lmsCopy", _createdPassword ?? "");
+        Snackbar.Add(copied ? "Password copied." : "Copy is not available in this browser.", copied ? Severity.Success : Severity.Warning);
+    }
+
+    private static string NewPassword()
+    {
+        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ", lower = "abcdefghijkmnpqrstuvwxyz", digits = "23456789";
+        const string all = upper + lower + digits;
+        var chars = new List<char>
+        {
+            upper[RandomNumberGenerator.GetInt32(upper.Length)],
+            lower[RandomNumberGenerator.GetInt32(lower.Length)],
+            digits[RandomNumberGenerator.GetInt32(digits.Length)]
+        };
+        while (chars.Count < 10) chars.Add(all[RandomNumberGenerator.GetInt32(all.Length)]);
+        return new string(chars.OrderBy(_ => RandomNumberGenerator.GetInt32(1000)).ToArray());
+    }
+}

@@ -1,4 +1,8 @@
 @inherits LayoutComponentBase
+@inject ApiClient Api
+@inject NavigationManager Navigation
+@inject IDialogService Dialogs
+
 <MudThemeProvider Theme="@_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
@@ -13,9 +17,11 @@
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Dashboard</MudNavLink>
             <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.PeopleAlt">User Management</MudNavLink>
             <MudNavLink Href="/rooms-pcs" Icon="@Icons.Material.Outlined.Computer">Computer Management</MudNavLink>
+            <MudNavLink Href="/vouchers" Icon="@Icons.Material.Outlined.ConfirmationNumber">Vouchers</MudNavLink>
             <MudNavLink Href="/logs" Icon="@Icons.Material.Outlined.ReceiptLong">Log Management</MudNavLink>
             <MudNavLink Href="/reports" Icon="@Icons.Material.Outlined.BarChart">Reports</MudNavLink>
             <MudNavLink Href="/notifications" Icon="@Icons.Material.Outlined.Notifications">Notifications</MudNavLink>
+            <MudNavLink OnClick="ConfirmLogout" Icon="@Icons.Material.Outlined.Logout">Logout</MudNavLink>
             <MudNavLink Href="/settings" Icon="@Icons.Material.Outlined.Settings">Settings</MudNavLink>
         </MudNavMenu>
         <div class="figma-sidebar-footer">© 2026 ACLC College of Mandaue</div>
@@ -24,27 +30,51 @@
         <div class="figma-topbar">
             <MudIconButton Icon="@Icons.Material.Filled.Menu" OnClick="ToggleDrawer" Class="mobile-menu" />
             <MudSpacer />
-            <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Color="Color.Error" />
+            <MudIconButton Icon="@Icons.Material.Outlined.NotificationsNone" Color="Color.Error" Href="/notifications" />
             <MudAvatar Class="figma-profile-avatar" />
-            <div class="figma-profile"><b>Admin User</b><span>Administrator</span></div>
-            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="signout-button">Sign out</MudButton>
+            <div class="figma-profile"><b>@_name</b><span>Administrator</span></div>
         </div>
         @Body
     </MudMainContent>
 </MudLayout>
+
 @code {
     private bool _drawerOpen = true;
+    private string _name = "Admin User";
+
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
-    [Inject] private LaboratoryManagementSystem.Web.Services.ApiClient Api { get; set; } = default!;
-    [Inject] private NavigationManager Navigation { get; set; } = default!;
-    private async Task SignOut()
+
+    protected override async Task OnInitializedAsync()
     {
-        await Api.LogoutAsync();
-        Navigation.NavigateTo("/login", replace: true);
+        try
+        {
+            var profile = await Api.GetAdminProfileAsync();
+            if (profile.ValueKind == JsonValueKind.Object)
+                _name = JsonRow.Str(profile, "fullName", "Admin User");
+        }
+        catch
+        {
+            // The name is cosmetic; keep the default when the API is unreachable.
+        }
     }
+
+    private async Task ConfirmLogout()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Log out of Admin Portal?",
+            "You'll need to sign in again to access the dashboard.",
+            yesText: "Log out",
+            cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await Api.LogoutAsync();
+            Navigation.NavigateTo("/login", replace: true);
+        }
+    }
+
     private MudTheme _theme = new()
     {
-        PaletteLight = new PaletteLight { Primary = "#bd171d", Secondary = "#7b8497", Background = "#ffffff", Surface = "#ffffff", AppbarBackground = "#ffffff", AppbarText = "#172033" },
+        PaletteLight = new PaletteLight { Primary = "#bd171d", Secondary = "#7b8497", Background = "#f5f7fb", Surface = "#ffffff", AppbarBackground = "#ffffff", AppbarText = "#0a1a30" },
         LayoutProperties = new LayoutProperties { DefaultBorderRadius = "12px" }
     };
 }

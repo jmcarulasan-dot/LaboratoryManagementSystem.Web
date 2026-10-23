@@ -1,0 +1,100 @@
+@page "/rooms-pcs/add"
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<div class="page-wrap">
+    <a class="back-link" href="/rooms-pcs">← Back to Computer Management</a>
+    <PageHeader Title="Add New Computer" Subtitle="Register a new PC to the lab inventory" />
+
+    <div class="lms-card form-card">
+        <div class="form-grid">
+            <MudTextField @bind-Value="_pcName" Label="PC Name / ID" Placeholder="e.g. PC-09" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudSelect T="int" @bind-Value="_roomId" Label="Lab Room" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem T="int" Value="0">Select a room…</MudSelectItem>
+                @foreach (var room in _rooms)
+                {
+                    <MudSelectItem T="int" Value="@room.Id">@room.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <div class="full">
+                <MudTextField @bind-Value="_newRoom" Label="Or create a new room" Placeholder="e.g. Software Lab 2" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="Leave empty to use the room selected above." />
+            </div>
+            <div class="full">
+                <div class="muted" style="font-size:12.5px;margin-bottom:6px">Initial Status</div>
+                <MudRadioGroup T="string" @bind-Value="_status">
+                    <MudRadio T="string" Value="@("Available")" Color="Color.Success">Available</MudRadio>
+                    <MudRadio T="string" Value="@("Under Maintenance")" Color="Color.Warning">Maintenance</MudRadio>
+                </MudRadioGroup>
+            </div>
+        </div>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">@_error</MudAlert>
+        }
+        <div class="form-actions">
+            <MudButton Href="/rooms-pcs" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="Save" StartIcon="@Icons.Material.Filled.Add">Add Computer</MudButton>
+        </div>
+    </div>
+</div>
+
+@code {
+    private sealed record RoomView(int Id, string Name);
+
+    private string _pcName = "", _newRoom = "", _status = "Available";
+    private int _roomId;
+    private string? _error;
+    private bool _busy;
+    private List<RoomView> _rooms = new();
+
+    protected override async Task OnInitializedAsync() => await LoadRooms();
+
+    private async Task LoadRooms()
+    {
+        try
+        {
+            var rooms = await Api.GetListAsync("api/rooms");
+            if (rooms is null) { _error = "Could not load rooms. Sign in again and check the API."; return; }
+            _rooms = rooms.Select(r => new RoomView(JsonRow.Int(r, "roomID"), JsonRow.Str(r, "roomName"))).ToList();
+        }
+        catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        var name = _pcName.Trim();
+        if (name.Length < 2) { _error = "PC name must be at least 2 characters."; return; }
+        var newRoom = _newRoom.Trim();
+        if (newRoom.Length == 0 && _roomId <= 0) { _error = "Select a room or enter a new room name."; return; }
+
+        _busy = true;
+        try
+        {
+            var roomId = _roomId;
+            if (newRoom.Length > 0)
+            {
+                var existing = _rooms.FirstOrDefault(r => string.Equals(r.Name.Trim(), newRoom, StringComparison.OrdinalIgnoreCase));
+                if (existing is not null) roomId = existing.Id;
+                else
+                {
+                    var (roomOk, roomMessage) = await Api.SendForResultAsync(HttpMethod.Post, "api/rooms", new { roomName = newRoom, isActive = true });
+                    if (!roomOk) { _error = roomMessage; return; }
+                    await LoadRooms();
+                    var created = _rooms.FirstOrDefault(r => string.Equals(r.Name.Trim(), newRoom, StringComparison.OrdinalIgnoreCase));
+                    if (created is null) { _error = "The room was created but could not be found. Refresh and try again."; return; }
+                    roomId = created.Id;
+                }
+            }
+
+            var (ok, message) = await Api.SendForResultAsync(HttpMethod.Post, "api/pcs",
+                new { roomID = roomId, pcName = name, pcStatus = _status, isActive = true });
+            if (!ok) { _error = message; return; }
+            Snackbar.Add($"{name} added to the lab.", Severity.Success);
+            Navigation.NavigateTo("/rooms-pcs");
+        }
+        catch (Exception ex) { _error = $"API request failed: {ex.Message}"; }
+        finally { _busy = false; }
+    }
+}

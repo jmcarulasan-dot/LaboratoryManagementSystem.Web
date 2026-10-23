@@ -1,12 +1,128 @@
 @page "/settings"
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+
 <div class="page-wrap">
- <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6"><div><MudText Typo="Typo.h4" Class="page-title">Settings</MudText><MudText Class="muted mt-1">Preview admin profile and system preferences.</MudText></div><MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="ShowDemoMessage">Edit settings</MudButton></MudStack>
- <MudPaper Elevation="0" Class="content-card pa-4"><MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-4"><MudTextField @bind-Value="_search" Placeholder="Search records..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:340px"/><MudSpacer/><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileDownload">Export</MudButton></MudStack>
- <MudTable Items="FilteredRows" Hover Dense Elevation="0"><HeaderContent>@foreach(var col in Columns){<MudTh>@col</MudTh>}</HeaderContent><RowTemplate>@foreach(var value in context){<MudTd>@if(value=="Available"||value=="Active"||value=="Read"||value=="Completed"){<MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@value</MudChip>}else if(value=="Suspended"||value=="Under Maintenance"||value=="Unread"){<MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@value</MudChip>}else if(value=="In Use"){<MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@value</MudChip>}else{@value} </MudTd>}</RowTemplate></MudTable></MudPaper>
- <MudText Typo="Typo.caption" Class="muted mt-4">Design preview only — sample records. API/database actions are not connected yet.</MudText>
+    <PageHeader Title="Settings" Subtitle="Manage your account and system preferences" />
+
+    <div class="dash-grid" style="grid-template-columns:240px minmax(0,1fr)">
+        <div class="lms-card" style="padding:10px">
+            <MudNavMenu>
+                <MudNavLink OnClick="@(() => _tab = "profile")" Icon="@Icons.Material.Outlined.Person" Class="@(_tab == "profile" ? "mud-nav-link-active" : "")">Profile</MudNavLink>
+                <MudNavLink OnClick="@(() => _tab = "security")" Icon="@Icons.Material.Outlined.Lock" Class="@(_tab == "security" ? "mud-nav-link-active" : "")">Security</MudNavLink>
+            </MudNavMenu>
+        </div>
+
+        <div class="lms-card">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Error" />
+            }
+            else if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@_error</MudAlert>
+            }
+            else if (_tab == "profile")
+            {
+                <h2 class="lms-card-title" style="margin-bottom:16px">Profile Information</h2>
+                <div class="form-grid">
+                    <MudTextField @bind-Value="_fullName" Label="Full Name" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField @bind-Value="_email" Label="Email Address" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="Must be a @@gmail.com address." />
+                    <MudTextField Value="@("System Administrator")" Label="Role" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField @bind-Value="_companyId" Label="Company ID" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </div>
+                <div class="form-actions">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reset">Cancel</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveProfile">Save Changes</MudButton>
+                </div>
+            }
+            else
+            {
+                <h2 class="lms-card-title" style="margin-bottom:16px">Change Password</h2>
+                <div class="form-grid">
+                    <MudTextField @bind-Value="_password" Label="New Password" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="At least 8 characters with upper and lower case letters." />
+                    <MudTextField @bind-Value="_confirm" Label="Confirm New Password" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </div>
+                <div class="form-actions">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SavePassword">Update Password</MudButton>
+                </div>
+            }
+        </div>
+    </div>
 </div>
-@code { private string _search=""; private string[] Columns=new[]{"Setting", "Current value"}; private List<string[]> Rows=new(){new[] { "Administrator name", "System Administrator" },
-        new[] { "Company ID", "ADM001" },
-        new[] { "Email", "admin@example.com" },
-        new[] { "Auto-save settings", "Enabled" },
-        new[] { "Default voucher duration", "2 hours" }}; private IEnumerable<string[]> FilteredRows=>string.IsNullOrWhiteSpace(_search)?Rows:Rows.Where(r=>string.Join(" ",r).Contains(_search,StringComparison.OrdinalIgnoreCase)); [Inject] private ISnackbar Snackbar{get;set;}=default!; private void ShowDemoMessage()=>Snackbar.Add("Settings form is a design placeholder. Saving preferences is not connected yet.",Severity.Info); private void ShowExportMessage()=>Snackbar.Add("Export is not available in the design preview yet.",Severity.Info); }
+
+@code {
+    private string _tab = "profile";
+    private bool _loading = true, _busy;
+    private string? _error;
+    private int _adminId;
+    private string _fullName = "", _email = "", _companyId = "", _password = "", _confirm = "";
+    private string _origName = "", _origEmail = "", _origCompany = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var profile = await Api.GetAdminProfileAsync();
+            if (profile.ValueKind != JsonValueKind.Object)
+            {
+                _error = "Could not load your profile. Sign in again and check that the API is running.";
+                return;
+            }
+            _adminId = JsonRow.Int(profile, "adminID");
+            _origName = JsonRow.Str(profile, "fullName", "");
+            _origEmail = JsonRow.Str(profile, "email", "");
+            _origCompany = JsonRow.Str(profile, "companyID", "");
+            Reset();
+        }
+        catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private void Reset()
+    {
+        _fullName = _origName;
+        _email = _origEmail;
+        _companyId = _origCompany;
+    }
+
+    private async Task SaveProfile()
+    {
+        if (_adminId <= 0) return;
+        _busy = true;
+        try
+        {
+            var (ok, message) = await Api.SendForResultAsync(HttpMethod.Put, $"api/admin/{_adminId}",
+                new { companyID = _companyId.Trim(), fullName = _fullName.Trim(), email = _email.Trim() });
+            if (ok)
+            {
+                _origName = _fullName.Trim();
+                _origEmail = _email.Trim();
+                _origCompany = _companyId.Trim();
+                Snackbar.Add("Profile updated. If you changed your Company ID, use the new one the next time you sign in.", Severity.Success);
+            }
+            else Snackbar.Add(message, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add($"API request failed: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task SavePassword()
+    {
+        if (_password != _confirm) { Snackbar.Add("The two passwords do not match.", Severity.Warning); return; }
+        if (_password.Length < 8 || !_password.Any(char.IsUpper) || !_password.Any(char.IsLower))
+        {
+            Snackbar.Add("Password needs at least 8 characters with upper and lower case letters.", Severity.Warning);
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var (ok, message) = await Api.SendForResultAsync(HttpMethod.Put, $"api/admin/{_adminId}/password", new { password = _password });
+            Snackbar.Add(ok ? "Password updated." : message, ok ? Severity.Success : Severity.Error);
+            if (ok) { _password = ""; _confirm = ""; }
+        }
+        catch (Exception ex) { Snackbar.Add($"API request failed: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+}

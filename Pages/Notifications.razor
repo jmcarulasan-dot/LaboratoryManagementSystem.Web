@@ -1,10 +1,76 @@
 @page "/notifications"
+@inject ApiClient Api
+
 <div class="page-wrap">
- <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6"><div><MudText Typo="Typo.h4" Class="page-title">Notifications</MudText><MudText Class="muted mt-1">View system alerts and laboratory updates.</MudText></div><MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="ShowDemoMessage">Notification options</MudButton></MudStack>
- <MudPaper Elevation="0" Class="content-card pa-4"><MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-4"><MudTextField @bind-Value="_search" Placeholder="Search records..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:340px"/><MudSpacer/><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileDownload">Export</MudButton></MudStack>
- <MudTable Items="FilteredRows" Hover Dense Elevation="0"><HeaderContent>@foreach(var col in Columns){<MudTh>@col</MudTh>}</HeaderContent><RowTemplate>@foreach(var value in context){<MudTd>@if(value=="Available"||value=="Active"||value=="Read"||value=="Completed"){<MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@value</MudChip>}else if(value=="Suspended"||value=="Under Maintenance"||value=="Unread"){<MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@value</MudChip>}else if(value=="In Use"){<MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@value</MudChip>}else{@value} </MudTd>}</RowTemplate></MudTable></MudPaper>
- <MudText Typo="Typo.caption" Class="muted mt-4">Design preview only — sample records. API/database actions are not connected yet.</MudText>
+    <PageHeader Title="Notifications" Subtitle="@(_rows.Count == 1 ? "1 alert" : $"{_rows.Count} alerts")">
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Refresh" OnClick="Load">Refresh</MudButton>
+    </PageHeader>
+
+    <div class="lms-card" style="padding:8px 22px">
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Error" Class="my-4" />
+        }
+        else if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="my-3">@_error</MudAlert>
+        }
+        else if (_rows.Count == 0)
+        {
+            <div class="empty">You're all caught up. No notifications yet.</div>
+        }
+        else
+        {
+            @foreach (var row in _rows)
+            {
+                <div class="notif-row">
+                    <div class="notif-icon"><MudIcon Icon="@IconFor(JsonRow.Str(row, "title", ""))" Size="Size.Small" /></div>
+                    <div>
+                        <div class="notif-title">@JsonRow.Str(row, "title")</div>
+                        <div class="notif-msg">@JsonRow.Str(row, "message")</div>
+                    </div>
+                    <div class="notif-time">@Ago(JsonRow.Date(row, "createdAt"))</div>
+                </div>
+            }
+        }
+    </div>
 </div>
-@code { private string _search=""; private string[] Columns=new[]{"Notification", "Details", "Time", "Status"}; private List<string[]> Rows=new(){new[] { "PC maintenance", "Lab 1 · PC 02 requires maintenance", "08:30 AM", "Unread" },
-        new[] { "Voucher expiry", "12 vouchers expire today", "08:00 AM", "Unread" },
-        new[] { "Session update", "3 students are currently using PCs", "07:55 AM", "Read" }}; private IEnumerable<string[]> FilteredRows=>string.IsNullOrWhiteSpace(_search)?Rows:Rows.Where(r=>string.Join(" ",r).Contains(_search,StringComparison.OrdinalIgnoreCase)); [Inject] private ISnackbar Snackbar{get;set;}=default!; private void ShowDemoMessage()=>Snackbar.Add("Notification actions are a design placeholder. API actions are not connected yet.",Severity.Info); private void ShowExportMessage()=>Snackbar.Add("Export is not available in the design preview yet.",Severity.Info); }
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<JsonElement> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var rows = await Api.GetListAsync("api/admin/notifications");
+            if (rows is null) _error = "Could not load notifications. Sign in again and check that the API and database are running.";
+            else _rows = rows;
+        }
+        catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private static string IconFor(string title) =>
+        title.Contains("voucher", StringComparison.OrdinalIgnoreCase) ? Icons.Material.Outlined.ConfirmationNumber
+        : title.Contains("suspend", StringComparison.OrdinalIgnoreCase) || title.Contains("lock", StringComparison.OrdinalIgnoreCase) ? Icons.Material.Outlined.WarningAmber
+        : title.Contains("account", StringComparison.OrdinalIgnoreCase) || title.Contains("student", StringComparison.OrdinalIgnoreCase) ? Icons.Material.Outlined.PersonOutline
+        : Icons.Material.Outlined.NotificationsNone;
+
+    private static string Ago(DateTime? date)
+    {
+        if (date is null) return "—";
+        var span = DateTime.Now - date.Value;
+        if (span.TotalMinutes < 1) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} min ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours} hrs ago";
+        if (span.TotalDays < 2) return "Yesterday";
+        return JsonRow.Day(date);
+    }
+}

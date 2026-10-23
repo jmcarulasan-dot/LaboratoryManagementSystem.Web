@@ -1,145 +1,144 @@
 @page "/"
-@using System.Text.Json
-@inject LaboratoryManagementSystem.Web.Services.ApiClient Api
-@inject NavigationManager Navigation
+@inject ApiClient Api
 
 <div class="page-wrap">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6">
-        <div>
-            <MudText Typo="Typo.h4" Class="page-title">Dashboard</MudText>
-            <MudText Class="muted mt-1">Computer Laboratory System overview</MudText>
-        </div>
-        <MudButton Href="/login" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login">Admin sign in</MudButton>
-    </MudStack>
+    <PageHeader Title="Dashboard" Subtitle="Welcome back, Administrator!" />
 
-    @if (!string.IsNullOrWhiteSpace(_error))
+    @if (_error is not null)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-            @_error <MudButton Href="/login" Color="Color.Primary" Size="Size.Small">Sign in</MudButton>
-        </MudAlert>
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">@_error</MudAlert>
     }
+
     @if (_loading)
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Error" Class="mb-4" />
-        <MudText Class="muted">Loading dashboard from the LMS API...</MudText>
     }
-    else if (_dashboard.HasValue)
+    else
     {
-        <MudGrid Spacing="3">
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Total Students</MudText><MudText Class="stat-number mt-3">@Metric("totalStudents", "TotalStudents", "studentCount", "StudentCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Registered PCs</MudText><MudText Class="stat-number mt-3">@Metric("totalPCs", "TotalPCs", "pcCount", "PCCount", "totalComputers")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Active Sessions</MudText><MudText Class="stat-number mt-3">@Metric("activeSessions", "ActiveSessions", "sessionCount", "SessionCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-            <MudItem xs="12" sm="6" lg="3"><MudCard Class="stat-card pa-4" Elevation="0"><MudText Class="muted">Available Vouchers</MudText><MudText Class="stat-number mt-3">@Metric("availableVouchers", "AvailableVouchers", "voucherCount", "VoucherCount")</MudText><MudText Typo="Typo.caption" Class="muted">Live API value</MudText></MudCard></MudItem>
-        </MudGrid>
+        <div class="stat-grid">
+            <div class="stat-tile">
+                <span class="pill pill-green stat-live">Live</span>
+                <div class="stat-icon"><MudIcon Icon="@Icons.Material.Outlined.Timer" Size="Size.Small" /></div>
+                <div class="stat-value">@_active</div>
+                <div class="stat-label">Active Sessions Now</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-icon"><MudIcon Icon="@Icons.Material.Outlined.Computer" Size="Size.Small" /></div>
+                <div class="stat-value">@_pcs</div>
+                <div class="stat-label">Total Computers in Lab</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-icon"><MudIcon Icon="@Icons.Material.Outlined.PeopleAlt" Size="Size.Small" /></div>
+                <div class="stat-value">@_students</div>
+                <div class="stat-label">Total Students Registered</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-icon"><MudIcon Icon="@Icons.Material.Outlined.Login" Size="Size.Small" /></div>
+                <div class="stat-value">@_logins</div>
+                <div class="stat-label">Today's Logins</div>
+            </div>
+        </div>
 
-        <MudGrid Spacing="3" Class="mt-2">
-            <MudItem xs="12" lg="7">
-                <MudCard Class="content-card pa-5" Elevation="0">
-                    <MudText Typo="Typo.h6" Style="font-weight:700">System Overview</MudText>
-                    <MudText Typo="Typo.body2" Class="muted mb-4">Summary returned by the API</MudText>
-                    <MudTable Items="_summaryRows" Dense="true" Hover="true" Elevation="0">
-                        <HeaderContent><MudTh>Metric</MudTh><MudTh>Value</MudTh></HeaderContent>
-                        <RowTemplate><MudTd>@context.Key</MudTd><MudTd>@context.Value</MudTd></RowTemplate>
-                    </MudTable>
-                </MudCard>
-            </MudItem>
-            <MudItem xs="12" lg="5">
-                <MudCard Class="content-card pa-5" Elevation="0">
-                    <MudText Typo="Typo.h6" Style="font-weight:700">Quick Actions</MudText>
-                    <MudStack Spacing="2" Class="mt-4">
-                        <MudButton Href="/students" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.People">User Management</MudButton>
-                        <MudButton Href="/rooms-pcs" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Computer">Computer Management</MudButton>
-                        <MudButton Href="/sessions" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Schedule">Lab Sessions</MudButton>
-                        <MudButton Href="/vouchers" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ConfirmationNumber">Vouchers</MudButton>
-                        <MudButton Href="/reports" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.BarChart">Reports</MudButton>
+        <div class="dash-grid">
+            <div class="lms-card">
+                <div class="lms-card-head">
+                    <h2 class="lms-card-title">Active Sessions</h2>
+                    <MudLink Href="/sessions" Color="Color.Error" Underline="Underline.None">View All Sessions →</MudLink>
+                </div>
+                @if (_activeSessions.Count == 0)
+                {
+                    <div class="empty">No active sessions right now.</div>
+                }
+                else
+                {
+                    <div class="lms-table-wrap">
+                        <table class="lms-table">
+                            <thead><tr><th>Student ID</th><th>Name</th><th>PC</th><th>Time In</th><th>Status</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in _activeSessions)
+                                {
+                                    <tr>
+                                        <td class="mono">@JsonRow.Str(row, "studentNo")</td>
+                                        <td>@JsonRow.Str(row, "studentName")</td>
+                                        <td class="mono">@JsonRow.Str(row, "pcName")</td>
+                                        <td>@JsonRow.Time(JsonRow.Date(row, "timeIn"))</td>
+                                        <td><span class="pill pill-green">Active</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div>
+                <div class="lms-card" style="margin-bottom:20px">
+                    <h2 class="lms-card-title" style="margin-bottom:14px">Quick Actions</h2>
+                    <MudStack Spacing="2">
+                        <MudButton Href="/students/add" FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">Add New Student</MudButton>
+                        <MudButton Href="/rooms-pcs/add" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Computer">Add New Computer</MudButton>
+                        <MudButton Href="/vouchers" FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ConfirmationNumber">Generate Vouchers</MudButton>
                     </MudStack>
-                </MudCard>
-            </MudItem>
-        </MudGrid>
-
-        <MudCard Class="content-card pa-5 mt-5" Elevation="0">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                <div><MudText Typo="Typo.h6" Style="font-weight:700">Lab Sessions</MudText><MudText Typo="Typo.body2" Class="muted">Records loaded from the API</MudText></div>
-                <MudButton Href="/sessions" Variant="Variant.Text" EndIcon="@Icons.Material.Filled.ArrowForward">View all</MudButton>
-            </MudStack>
-            @if (_sessions.Count == 0)
-            {
-                <MudText Class="muted pa-3">The API returned no session records, or its response format needs mapping.</MudText>
-            }
-            else
-            {
-                <MudTable Items="_sessions" Dense="true" Hover="true" Elevation="0">
-                    <HeaderContent><MudTh>Student</MudTh><MudTh>Student No.</MudTh><MudTh>Room / PC</MudTh><MudTh>Time In</MudTh><MudTh>Status</MudTh></HeaderContent>
-                    <RowTemplate>
-                        <MudTd>@Read(context, "fullName", "FullName", "studentName", "StudentName")</MudTd>
-                        <MudTd>@Read(context, "studentNo", "StudentNo")</MudTd>
-                        <MudTd>@Read(context, "roomName", "RoomName", "pcName", "PCName", "location", "Location")</MudTd>
-                        <MudTd>@Read(context, "timeIn", "TimeIn", "startTime", "StartTime", "createdAt", "CreatedAt")</MudTd>
-                        <MudTd>@Read(context, "status", "Status", "sessionStatus", "SessionStatus")</MudTd>
-                    </RowTemplate>
-                </MudTable>
-            }
-        </MudCard>
+                </div>
+                <div class="lms-card">
+                    <h2 class="lms-card-title" style="margin-bottom:6px">System Overview</h2>
+                    <table class="lms-table">
+                        <tbody>
+                            <tr><td>System Status</td><td style="text-align:right"><span class="pill @(_error is null ? "pill-green" : "pill-red")">@(_error is null ? "Online" : "Offline")</span></td></tr>
+                            <tr><td>Database</td><td style="text-align:right"><span class="pill @(_dashboardOk ? "pill-green" : "pill-red")">@(_dashboardOk ? "Connected" : "Unavailable")</span></td></tr>
+                            <tr><td>Available PCs</td><td style="text-align:right">@_availablePcs of @_pcs</td></tr>
+                            <tr><td>Ready Vouchers</td><td style="text-align:right">@_vouchers</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     }
 </div>
 
 @code {
-    private JsonElement? _dashboard;
-    private List<JsonElement> _sessions = new();
-    private List<KeyValuePair<string, string>> _summaryRows = new();
     private bool _loading = true;
+    private bool _dashboardOk;
     private string? _error;
+    private int _active, _pcs, _students, _logins, _availablePcs, _vouchers;
+    private List<JsonElement> _activeSessions = new();
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _dashboard = await Api.GetAsync<JsonElement>("api/admin/dashboard");
-            if (!_dashboard.HasValue || _dashboard.Value.ValueKind == JsonValueKind.Undefined)
+            var dashboard = await Api.GetAsync<JsonElement>("api/admin/dashboard");
+            if (dashboard.ValueKind == JsonValueKind.Object)
             {
-                _error = "Dashboard data could not be loaded. Please sign in with an admin account and check that the API/database are running.";
-                return;
+                _dashboardOk = true;
+                _active = JsonRow.Int(dashboard, "activeSessions");
+                _pcs = JsonRow.Int(dashboard, "totalPCs");
+                _students = JsonRow.Int(dashboard, "totalStudents");
+                _availablePcs = JsonRow.Int(dashboard, "availablePCs");
+                _vouchers = JsonRow.Int(dashboard, "activeVouchers");
+            }
+            else
+            {
+                _error = "Dashboard data could not be loaded. Sign in again and check that the API and database are running.";
             }
 
-            var root = _dashboard.Value;
-            if (root.ValueKind == JsonValueKind.Object)
-                _summaryRows = root.EnumerateObject().Select(p => new KeyValuePair<string, string>(p.Name, Format(p.Value))).ToList();
-
-            var sessions = await Api.GetAsync<JsonElement>("api/admin/sessions");
-            if (sessions.ValueKind == JsonValueKind.Array)
-                _sessions = sessions.EnumerateArray().ToList();
+            var sessions = await Api.GetListAsync("api/admin/sessions");
+            if (sessions is not null)
+            {
+                _logins = sessions.Count(s => JsonRow.Date(s, "timeIn")?.Date == DateTime.Today);
+                _activeSessions = sessions
+                    .Where(s => JsonRow.Find(s, "timeOut") is not { ValueKind: not JsonValueKind.Null })
+                    .Take(5)
+                    .ToList();
+            }
         }
         catch (Exception ex)
         {
-            _error = $"Unable to connect to the LMS API ({ex.Message}). Start the API and sign in.";
+            _error = $"Unable to reach the LMS API ({ex.Message}). Start the API and sign in.";
         }
-        finally { _loading = false; }
+        finally
+        {
+            _loading = false;
+        }
     }
-
-    private string Metric(params string[] names)
-    {
-        if (!_dashboard.HasValue || _dashboard.Value.ValueKind != JsonValueKind.Object) return "—";
-        foreach (var name in names)
-            if (_dashboard.Value.TryGetProperty(name, out var value)) return Format(value);
-        return "—";
-    }
-
-    private static string Read(JsonElement row, params string[] names)
-    {
-        if (row.ValueKind != JsonValueKind.Object) return "—";
-        foreach (var name in names)
-            if (row.TryGetProperty(name, out var value)) return Format(value);
-        return "—";
-    }
-
-    private static string Format(JsonElement value) => value.ValueKind switch
-    {
-        JsonValueKind.Null or JsonValueKind.Undefined => "—",
-        JsonValueKind.String => value.GetString() ?? "—",
-        JsonValueKind.Object => "(object)",
-        JsonValueKind.Array => $"{value.GetArrayLength()} items",
-        JsonValueKind.True => "Yes",
-        JsonValueKind.False => "No",
-        _ => value.ToString()
-    };
 }

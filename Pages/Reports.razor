@@ -1,10 +1,204 @@
 @page "/reports"
+@inject ApiClient Api
+@inject IJSRuntime Js
+@inject ISnackbar Snackbar
+
 <div class="page-wrap">
- <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6"><div><MudText Typo="Typo.h4" Class="page-title">Reports</MudText><MudText Class="muted mt-1">Review attendance, PC usage, and voucher activity.</MudText></div><MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="ShowDemoMessage">Report options</MudButton></MudStack>
- <MudPaper Elevation="0" Class="content-card pa-4"><MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-4"><MudTextField @bind-Value="_search" Placeholder="Search records..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:340px"/><MudSpacer/><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileDownload">Export</MudButton></MudStack>
- <MudTable Items="FilteredRows" Hover Dense Elevation="0"><HeaderContent>@foreach(var col in Columns){<MudTh>@col</MudTh>}</HeaderContent><RowTemplate>@foreach(var value in context){<MudTd>@if(value=="Available"||value=="Active"||value=="Read"||value=="Completed"){<MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@value</MudChip>}else if(value=="Suspended"||value=="Under Maintenance"||value=="Unread"){<MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@value</MudChip>}else if(value=="In Use"){<MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@value</MudChip>}else{@value} </MudTd>}</RowTemplate></MudTable></MudPaper>
- <MudText Typo="Typo.caption" Class="muted mt-4">Design preview only — sample records. API/database actions are not connected yet.</MudText>
+    <PageHeader Title="Reports" Subtitle="Usage insights and exportable summaries">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FileDownload" OnClick="Export" Disabled="_loading">Export CSV</MudButton>
+    </PageHeader>
+
+    <div class="report-cards">
+        <button type="button" class="report-card @(_kind == "attendance" ? "selected" : "")" @onclick='() => Select("attendance")'>
+            <MudIcon Icon="@Icons.Material.Outlined.Assignment" Style="color:#bd171d" />
+            <div class="rc-title">Attendance Report</div><div class="rc-sub">Daily lab sign-ins and who attended</div>
+        </button>
+        <button type="button" class="report-card @(_kind == "usage" ? "selected" : "")" @onclick='() => Select("usage")'>
+            <MudIcon Icon="@Icons.Material.Outlined.HourglassEmpty" Style="color:#bd171d" />
+            <div class="rc-title">Usage Report</div><div class="rc-sub">PC utilization, longest sessions first</div>
+        </button>
+        <button type="button" class="report-card @(_kind == "vouchers" ? "selected" : "")" @onclick='() => Select("vouchers")'>
+            <MudIcon Icon="@Icons.Material.Outlined.ConfirmationNumber" Style="color:#bd171d" />
+            <div class="rc-title">Voucher Report</div><div class="rc-sub">Redeemed vs. unused vouchers</div>
+        </button>
+    </div>
+
+    <div class="lms-card">
+        <div class="lms-card-head">
+            <div>
+                <h2 class="lms-card-title">@Title</h2>
+                <div class="lms-card-sub">@Subtitle</div>
+            </div>
+            <div class="row-actions">
+                <MudDatePicker @bind-Date="_from" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="width:160px" />
+                <MudDatePicker @bind-Date="_to" Label="To" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="width:160px" />
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="Load">Apply</MudButton>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Error" />
+        }
+        else if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@_error</MudAlert>
+        }
+        else if (_rows.Count == 0)
+        {
+            <div class="empty">No records for this period.</div>
+        }
+        else
+        {
+            @if (_bars.Count > 0)
+            {
+                var max = Math.Max(1, _bars.Max(b => b.Value));
+                <div class="bars">
+                    @foreach (var bar in _bars)
+                    {
+                        <div class="bar-col">
+                            <div class="bar-val">@bar.Value</div>
+                            <div class="bar" style="height:@(Math.Max(3, (int)(bar.Value * 100.0 / max)))%"></div>
+                        </div>
+                    }
+                </div>
+                <div class="bar-labels">
+                    @foreach (var bar in _bars)
+                    {
+                        <div>@bar.Label</div>
+                    }
+                </div>
+            }
+
+            <div class="lms-table-wrap" style="margin-top:22px">
+                <table class="lms-table">
+                    <thead>
+                        <tr>
+                            @foreach (var column in Columns)
+                            {
+                                <th>@column</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in Lines.Take(100))
+                        {
+                            <tr>
+                                @foreach (var cell in line)
+                                {
+                                    <td>@cell</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="muted" style="font-size:12px;margin-top:12px">Showing @Math.Min(100, _rows.Count) of @_rows.Count records. Export CSV includes all of them.</div>
+        }
+    </div>
 </div>
-@code { private string _search=""; private string[] Columns=new[]{"Report", "Description", "Period"}; private List<string[]> Rows=new(){new[] { "Attendance", "Student attendance and session times", "Today" },
-        new[] { "PC Usage", "Room and computer utilization", "This week" },
-        new[] { "Voucher Activity", "Generated, used, and expired vouchers", "This month" }}; private IEnumerable<string[]> FilteredRows=>string.IsNullOrWhiteSpace(_search)?Rows:Rows.Where(r=>string.Join(" ",r).Contains(_search,StringComparison.OrdinalIgnoreCase)); [Inject] private ISnackbar Snackbar{get;set;}=default!; private void ShowDemoMessage()=>Snackbar.Add("Report generation is a design placeholder. Report data is not connected yet.",Severity.Info); private void ShowExportMessage()=>Snackbar.Add("Export is not available in the design preview yet.",Severity.Info); }
+
+@code {
+    private sealed record Bar(string Label, int Value);
+
+    private string _kind = "attendance";
+    private bool _loading = true;
+    private string? _error;
+    private DateTime? _from, _to;
+    private List<JsonElement> _rows = new();
+    private List<Bar> _bars = new();
+
+    private string Title => _kind switch { "usage" => "PC Usage", "vouchers" => "Voucher Activity", _ => "Lab Attendance" };
+    private string Subtitle => _kind switch
+    {
+        "usage" => "Sessions ranked by time spent on a PC",
+        "vouchers" => "Vouchers created in the selected period, by day",
+        _ => "Sessions logged per day"
+    };
+
+    private string[] Columns => _kind == "vouchers"
+        ? new[] { "Voucher Code", "Student", "Status", "Created", "Expires" }
+        : new[] { "Student ID", "Name", "Room / PC", "Time In", "Time Out", "Duration" };
+
+    private IEnumerable<string[]> Lines => _rows.Select(Line);
+
+    private string[] Line(JsonElement r) => _kind == "vouchers"
+        ? new[]
+        {
+            JsonRow.Str(r, "voucherCode"),
+            JsonRow.Str(r, "studentNo", "Not assigned"),
+            JsonRow.Str(r, "status") == "Active" ? "Ready" : JsonRow.Str(r, "status"),
+            JsonRow.When(JsonRow.Date(r, "createdAt")),
+            JsonRow.Day(JsonRow.Date(r, "expiresAt"))
+        }
+        : new[]
+        {
+            JsonRow.Str(r, "studentNo"),
+            JsonRow.Str(r, "studentName"),
+            $"{JsonRow.Str(r, "roomName")} · {JsonRow.Str(r, "pcName")}",
+            JsonRow.When(JsonRow.Date(r, "timeIn")),
+            JsonRow.When(JsonRow.Date(r, "timeOut")),
+            Duration(JsonRow.Int(r, "durationMinutes"))
+        };
+
+    private static string Duration(int minutes) => minutes >= 60 ? $"{minutes / 60}h {minutes % 60}m" : $"{minutes}m";
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Select(string kind)
+    {
+        _kind = kind;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            if (_from.HasValue && _to.HasValue && _from > _to)
+            {
+                _error = "The 'From' date cannot be later than the 'To' date.";
+                _rows = new();
+                _bars = new();
+                return;
+            }
+
+            var query = new List<string>();
+            if (_from.HasValue) query.Add($"from={_from.Value:yyyy-MM-dd}");
+            if (_to.HasValue) query.Add($"to={_to.Value:yyyy-MM-dd}");
+            var path = $"api/admin/reports/{_kind}" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
+
+            var rows = await Api.GetListAsync(path);
+            if (rows is null)
+            {
+                _error = "Could not load this report. Sign in again and check that the API and database are running.";
+                _rows = new();
+                _bars = new();
+                return;
+            }
+
+            _rows = rows;
+            var dateField = _kind == "vouchers" ? "createdAt" : "timeIn";
+            _bars = rows
+                .Select(r => JsonRow.Date(r, dateField))
+                .Where(d => d.HasValue)
+                .GroupBy(d => d!.Value.Date)
+                .OrderByDescending(g => g.Key)
+                .Take(7)
+                .OrderBy(g => g.Key)
+                .Select(g => new Bar(g.Key.ToString("MMM d"), g.Count()))
+                .ToList();
+        }
+        catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task Export()
+    {
+        if (_rows.Count == 0) { Snackbar.Add("There is nothing to export for this period.", Severity.Info); return; }
+        var csv = JsonRow.Csv(Columns, Lines.Select(l => (IEnumerable<string>)l));
+        await Js.InvokeVoidAsync("lmsDownload", $"report-{_kind}-{DateTime.Today:yyyyMMdd}.csv", csv);
+    }
+}

@@ -1,55 +1,68 @@
 @page "/students"
-@using System.Text.Json
-@inject LaboratoryManagementSystem.Web.Services.ApiClient Api
+@inject ApiClient Api
 @inject ISnackbar Snackbar
+@inject IDialogService Dialogs
 
 <div class="page-wrap">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6">
-        <div><MudText Typo="Typo.h4" Class="page-title">User Management</MudText><MudText Class="muted mt-1">Student accounts loaded from the LMS API.</MudText></div>
-        <MudButton Href="/login" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login">Admin sign in</MudButton>
-    </MudStack>
-    <MudPaper Elevation="0" Class="content-card pa-4">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
-            <MudTextField @bind-Value="_search" Placeholder="Search students..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:340px" />
-            <MudSpacer />
+    <PageHeader Title="User Management" Subtitle="Manage student accounts">
+        <MudButton Href="/students/add" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">Add New Student</MudButton>
+    </PageHeader>
+
+    <div class="lms-card">
+        <div class="toolbar">
+            <MudTextField @bind-Value="_search" Immediate="true" Placeholder="Search by name or student ID" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:340px" />
+            <span class="grow"></span>
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadStudents">Refresh</MudButton>
-        </MudStack>
+        </div>
+
         @if (_loading)
         {
             <MudProgressLinear Indeterminate="true" Color="Color.Error" />
         }
-        else if (!string.IsNullOrWhiteSpace(_error))
+        else if (_error is not null)
         {
-            <MudAlert Severity="Severity.Warning">@_error <MudButton Href="/login" Size="Size.Small" Color="Color.Primary">Sign in</MudButton></MudAlert>
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@_error</MudAlert>
         }
-        else if (_rows.Count == 0)
+        else if (Filtered.Count == 0)
         {
-            <MudText Class="muted pa-4">No student records were returned by the API.</MudText>
+            <div class="empty">No students found.</div>
         }
         else
         {
-            <MudTable Items="FilteredRows" Hover="true" Dense="true" Elevation="0">
-                <HeaderContent><MudTh>Student No.</MudTh><MudTh>Full Name</MudTh><MudTh>Course / Section</MudTh><MudTh>Email</MudTh><MudTh>Status</MudTh><MudTh>Action</MudTh></HeaderContent>
-                <RowTemplate>
-                    <MudTd>@Read(context, "studentNo", "StudentNo")</MudTd>
-                    <MudTd>@Read(context, "fullName", "FullName")</MudTd>
-                    <MudTd>@Read(context, "courseSection", "CourseSection")</MudTd>
-                    <MudTd>@Read(context, "email", "Email")</MudTd>
-                    <MudTd>@(IsSuspended(context) ? "Suspended" : "Active")</MudTd>
-                    <MudTd>
-                        @if (IsSuspended(context))
+            <div class="lms-table-wrap">
+                <table class="lms-table">
+                    <thead><tr><th>Student ID</th><th>Name</th><th>Course / Section</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in Filtered)
                         {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="@(() => SetSuspension(context, false))">Unsuspend</MudButton>
+                            var suspended = JsonRow.Bool(row, "isSuspended");
+                            <tr>
+                                <td class="mono">@JsonRow.Str(row, "studentNo")</td>
+                                <td>@JsonRow.Str(row, "fullName")</td>
+                                <td>@JsonRow.Str(row, "courseSection")</td>
+                                <td class="muted">@JsonRow.Str(row, "email")</td>
+                                <td><span class="pill @(suspended ? "pill-red" : "pill-green")">@(suspended ? "Suspended" : "Active")</span></td>
+                                <td>
+                                    <div class="row-actions">
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" OnClick="@(() => ResetMfa(row))">Reset MFA</MudButton>
+                                        @if (suspended)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="@(() => SetSuspension(row, false))">Unsuspend</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => SetSuspension(row, true))">Suspend</MudButton>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
                         }
-                        else
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => SetSuspension(context, true))">Suspend</MudButton>
-                        }
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
+                    </tbody>
+                </table>
+            </div>
+            <div class="muted" style="font-size:12px;margin-top:12px">Showing @Filtered.Count of @_rows.Count students</div>
         }
-    </MudPaper>
+    </div>
 </div>
 
 @code {
@@ -57,19 +70,26 @@
     private bool _loading = true;
     private string? _error;
     private List<JsonElement> _rows = new();
-    private IEnumerable<JsonElement> FilteredRows => string.IsNullOrWhiteSpace(_search) ? _rows : _rows.Where(r => r.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private List<JsonElement> Filtered => string.IsNullOrWhiteSpace(_search)
+        ? _rows
+        : _rows.Where(r =>
+            JsonRow.Str(r, "studentNo", "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            JsonRow.Str(r, "fullName", "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            JsonRow.Str(r, "courseSection", "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            JsonRow.Str(r, "email", "").Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
 
     protected override async Task OnInitializedAsync() => await LoadStudents();
 
     private async Task LoadStudents()
     {
-        _loading = true; _error = null;
+        _loading = true;
+        _error = null;
         try
         {
-            var result = await Api.GetAsync<JsonElement>("api/admin/students");
-            if (result.ValueKind != JsonValueKind.Array)
-                _error = "Could not load students. Sign in as an admin and check the API/database.";
-            else _rows = result.EnumerateArray().ToList();
+            var result = await Api.GetListAsync("api/admin/students");
+            if (result is null) _error = "Could not load students. Sign in again and check that the API and database are running.";
+            else _rows = result;
         }
         catch (Exception ex) { _error = $"API connection failed: {ex.Message}"; }
         finally { _loading = false; }
@@ -77,26 +97,33 @@
 
     private async Task SetSuspension(JsonElement row, bool suspend)
     {
-        var studentNo = Read(row, "studentNo", "StudentNo");
-        if (string.IsNullOrWhiteSpace(studentNo) || studentNo == "—") return;
+        var studentNo = JsonRow.Str(row, "studentNo", "");
+        if (studentNo.Length == 0) return;
         var action = suspend ? "suspend" : "unsuspend";
         try
         {
-            var ok = await Api.SendSuccessAsync(HttpMethod.Put, $"api/admin/students/{Uri.EscapeDataString(studentNo)}/{action}");
-            if (ok) { Snackbar.Add(suspend ? "Student suspended." : "Student unsuspended.", Severity.Success); await LoadStudents(); }
-            else Snackbar.Add("Action failed. Check your admin session and API response.", Severity.Error);
+            var (ok, message) = await Api.SendForResultAsync(HttpMethod.Put, $"api/admin/students/{Uri.EscapeDataString(studentNo)}/{action}");
+            Snackbar.Add(ok ? (suspend ? "Student suspended." : "Student unsuspended.") : message, ok ? Severity.Success : Severity.Error);
+            if (ok) await LoadStudents();
         }
         catch (Exception ex) { Snackbar.Add($"API request failed: {ex.Message}", Severity.Error); }
     }
 
-    private static bool IsSuspended(JsonElement row) => row.ValueKind == JsonValueKind.Object &&
-        row.EnumerateObject().Any(p => (p.Name.Equals("isSuspended", StringComparison.OrdinalIgnoreCase) || p.Name.Equals("suspended", StringComparison.OrdinalIgnoreCase)) && p.Value.ValueKind == JsonValueKind.True);
-
-    private static string Read(JsonElement row, params string[] names)
+    private async Task ResetMfa(JsonElement row)
     {
-        if (row.ValueKind != JsonValueKind.Object) return "—";
-        foreach (var name in names)
-            if (row.TryGetProperty(name, out var value)) return value.ValueKind == JsonValueKind.Null ? "—" : value.ToString();
-        return "—";
+        var studentNo = JsonRow.Str(row, "studentNo", "");
+        if (studentNo.Length == 0) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Reset authenticator?",
+            "This clears the student's current authenticator. At the next sign-in they will scan a new QR code and enter a six-digit code to reconnect.",
+            yesText: "Reset MFA",
+            cancelText: "Keep current setup");
+        if (confirmed != true) return;
+        try
+        {
+            var (ok, message) = await Api.SendForResultAsync(HttpMethod.Put, $"api/admin/students/{Uri.EscapeDataString(studentNo)}/security/totp/reset");
+            Snackbar.Add(ok ? "Authenticator reset. The student can set it up again at next sign-in." : message, ok ? Severity.Success : Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add($"API request failed: {ex.Message}", Severity.Error); }
     }
 }
